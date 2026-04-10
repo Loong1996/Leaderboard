@@ -6,11 +6,12 @@
  *     百万级实时排行榜模板类。
  *     基于有序 vector 实现，支持自定义排序规则。
  *     查询操作 O(1)（TopN / AroundRank / GetEntryByRank），
- *     更新操作 O(N)（UpdateEntry / RemoveEntry / GetRank）。
+ *     更新操作 O(N)（UpdateEntry / RemoveEntry），
+ *     GetRank/RemoveEntry: O(log N + K)（传入 value 时二分定位，K 为相等区间大小）
  *     TKey:     玩家唯一标识类型（如 uint64_t）
  *     TValue:   排序数据类型（POD 结构体、基础类型或指针均可）
- *     TCompare: 比较仿函数，返回 true 表示 lhs 排名应高于 rhs，
- *               默认 std::greater<TValue>（值大者排名靠前）
+ *     TCompare: 比较仿函数，默认 std::greater<TValue>（仅比较 value），
+ *               若需含 key 的全序比较，自定义 TKeyCompare
  */
 #pragma once
 
@@ -18,6 +19,44 @@
 #include <vector>
 #include <algorithm>
 #include <functional>
+
+// ============================================================
+// 包装比较器：将比较 TValue 包装为比较 ST_RANK_NODE
+// ============================================================
+
+template <typename TKey, typename TValue, typename TValueCompare>
+class TNodeCompareWrapper
+{
+public:
+	explicit TNodeCompareWrapper(const TValueCompare& fnValCmp = TValueCompare())
+		: m_fnValCmp(fnValCmp)
+	{
+	}
+
+	bool operator()(const TValue& lhsValue, const TValue& rhsValue) const
+	{
+		return m_fnValCmp(lhsValue, rhsValue);
+	}
+
+	bool operator()(const TKey& lhsKey, const TValue& lhsValue,
+	                const TKey& rhsKey, const TValue& rhsValue) const
+	{
+		// 先比较 value
+		if (m_fnValCmp(lhsValue, rhsValue))
+			return true;
+		if (m_fnValCmp(rhsValue, lhsValue))
+			return false;
+		// value 相等时用 key 决胜
+		return lhsKey < rhsKey;
+	}
+
+private:
+	TValueCompare m_fnValCmp;
+};
+
+// ============================================================
+// 主模板类
+// ============================================================
 
 template <typename TKey, typename TValue, typename TCompare = std::greater<TValue>>
 class TLeaderboard
@@ -67,8 +106,11 @@ public:
 			m_vecRank.erase(m_vecRank.begin() + uiOldIndex);
 		}
 
+		// 构造节点用于二分查找
+		ST_RANK_NODE stNode{ key, value };
+
 		// 二分查找插入位置
-		uint32_t uiInsertPos = this->FindInsertPos(value);
+		uint32_t uiInsertPos = this->FindInsertPos(stNode);
 
 		// MaxSize 截断检查
 		if ((m_uiMaxSize > 0) && (uiInsertPos >= m_uiMaxSize))
@@ -77,9 +119,6 @@ public:
 		}
 
 		// 插入新条目
-		ST_RANK_NODE stNode;
-		stNode.key = key;
-		stNode.value = value;
 		m_vecRank.insert(m_vecRank.begin() + uiInsertPos, stNode);
 
 		// 截断超出 MaxSize 的末尾
@@ -92,13 +131,33 @@ public:
 	}
 
 	/**
-	 * @brief 移除排行榜条目
+	 * @brief 移除排行榜条目（O(N) 线性扫描）
 	 * @param [in] key 玩家唯一标识
 	 * @return 是否成功移除
+	 * @note 性能较差，仅用于无法获取 value 的场景，建议尽可能使用 RemoveEntry(key, value)
 	 */
 	bool RemoveEntry(const TKey& key)
 	{
 		uint32_t uiIndex = this->FindByKey(key);
+		if (uiIndex >= this->GetCount())
+		{
+			return false;
+		}
+
+		m_vecRank.erase(m_vecRank.begin() + uiIndex);
+		return true;
+	}
+
+	/**
+	 * @brief 移除排行榜条目（O(log N + K) 二分定位）
+	 * @param [in] key 玩家唯一标识
+	 * @param [in] value 排序数据（用于二分定位）
+	 * @return 是否成功移除
+	 */
+	bool RemoveEntry(const TKey& key, const TValue& value)
+	{
+		ST_RANK_NODE stNode{ key, value };
+		uint32_t uiIndex = this->FindByNode(stNode);
 		if (uiIndex >= this->GetCount())
 		{
 			return false;
@@ -119,9 +178,28 @@ public:
 	// --- 查询操作 ---
 
 	/**
-	 * @brief 获取玩家排名
+	 * @brief 获取玩家排名（O(log N + K) 二分定位）
+	 * @param [in] key 玩家唯一标识
+	 * @param [in] value 排序数据（用于二分定位）
+	 * @return 排名（1-based），未找到返回 0
+	 */
+	uint32_t GetRank(const TKey& key, const TValue& value) const
+	{
+		ST_RANK_NODE stNode{ key, value };
+		uint32_t uiIndex = this->FindByNode(stNode);
+		if (uiIndex >= this->GetCount())
+		{
+			return 0;
+		}
+
+		return uiIndex + 1;
+	}
+
+	/**
+	 * @brief 获取玩家排名（O(N) 线性扫描）
 	 * @param [in] key 玩家唯一标识
 	 * @return 排名（1-based），未找到返回 0
+	 * @note 性能较差，仅用于无法获取 value 的场景，建议尽可能使用 GetRank(key, value)
 	 */
 	uint32_t GetRank(const TKey& key) const
 	{
@@ -202,7 +280,7 @@ public:
 	}
 
 	/**
-	 * @brief 按 key 查找节点
+	 * @brief 按 key 查找节点（O(N) 线性扫描）
 	 * @param [in] key 玩家唯一标识
 	 * @return 节点指针，未找到返回 nullptr
 	 */
@@ -246,21 +324,67 @@ private:
 	}
 
 	/**
-	 * @brief 二分查找插入位置
-	 * @param [in] value 待插入的排序数据
+	 * @brief 二分查找插入位置（仅比较 value，key 相等时作为决胜）
+	 * @param [in] stNode 待插入的节点
 	 * @return 插入位置下标
 	 */
-	uint32_t FindInsertPos(const TValue& value) const
+	uint32_t FindInsertPos(const ST_RANK_NODE& stNode) const
 	{
-		// upper_bound 找到第一个"排名低于 value"的位置
 		auto it = std::upper_bound(
-			m_vecRank.begin(), m_vecRank.end(), value,
-			[this](const TValue& lhs, const ST_RANK_NODE& rhs)
+			m_vecRank.begin(), m_vecRank.end(), stNode,
+			[this](const ST_RANK_NODE& lhs, const ST_RANK_NODE& rhs)
 			{
-				return m_fnCompare(lhs, rhs.value);
+				// 先比较 value
+				if (m_fnCompare(lhs.value, rhs.value))
+					return true;
+				if (m_fnCompare(rhs.value, lhs.value))
+					return false;
+				// value 相等时用 key 决胜
+				return lhs.key < rhs.key;
 			});
 
 		return static_cast<uint32_t>(it - m_vecRank.begin());
+	}
+
+	/**
+	 * @brief 二分定位 key+value 对应的下标
+	 * @param [in] stNode 包含 key 和 value 的节点
+	 * @return 下标，未找到返回 GetCount()
+	 */
+	uint32_t FindByNode(const ST_RANK_NODE& stNode) const
+	{
+		auto it = std::lower_bound(
+			m_vecRank.begin(), m_vecRank.end(), stNode,
+			[this](const ST_RANK_NODE& lhs, const ST_RANK_NODE& rhs)
+			{
+				// 先比较 value
+				if (m_fnCompare(lhs.value, rhs.value))
+					return true;
+				if (m_fnCompare(rhs.value, lhs.value))
+					return false;
+				// value 相等时用 key 决胜
+				return lhs.key < rhs.key;
+			});
+
+		// 在"相等区间"内线性查找匹配 key
+		while (it != m_vecRank.end())
+		{
+			// 检查是否"相等"（value 相同且 key 相同）
+			if (!m_fnCompare(it->value, stNode.value) && !m_fnCompare(stNode.value, it->value))
+			{
+				if (it->key == stNode.key)
+				{
+					return static_cast<uint32_t>(it - m_vecRank.begin());
+				}
+				++it;
+			}
+			else
+			{
+				break;
+			}
+		}
+
+		return this->GetCount();
 	}
 
 	VEC_RANK_NODE m_vecRank;     // 有序数组（唯一数据源）

@@ -145,7 +145,7 @@ static void RunBenchmark()
 
 	assert(objBoard.GetCount() == PLAYER_COUNT);
 
-	// 测试 GetRank（随机查询 1000 次）
+	// 测试 GetRank（随机查询 1000 次，使用 value 参数实现 O(log N)）
 	{
 		const uint32_t QUERY_COUNT = 1000;
 		std::uniform_int_distribution<uint64_t> distKey(1, PLAYER_COUNT);
@@ -154,12 +154,13 @@ static void RunBenchmark()
 		for (uint32_t ui = 0; ui < QUERY_COUNT; ++ui)
 		{
 			uint64_t ulKey = distKey(rng);
-			volatile uint32_t uiRank = objBoard.GetRank(ulKey);
+			int64_t iScore = vecScores[ulKey - 1];  // 获取该 key 对应的分数
+			volatile uint32_t uiRank = objBoard.GetRank(ulKey, iScore);
 			(void)uiRank;
 		}
 
 		double dbElapsed = sw.ElapsedMs();
-		printf("GetRank x%u: %.1f ms (avg %.3f ms/op)\n",
+		printf("GetRank(key, value) x%u: %.1f ms (avg %.3f ms/op)\n",
 		       QUERY_COUNT, dbElapsed, dbElapsed / QUERY_COUNT);
 	}
 
