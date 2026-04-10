@@ -41,6 +41,15 @@ public:
 
 	~TLeaderboard() = default;
 
+	/**
+	 * @brief 预分配内存
+	 * @param [in] uiCapacity 预分配容量
+	 */
+	void Reserve(uint32_t uiCapacity)
+	{
+		m_vecRank.reserve(uiCapacity);
+	}
+
 	// --- 更新操作 ---
 
 	/**
@@ -52,14 +61,14 @@ public:
 	uint32_t UpdateEntry(const TKey& key, const TValue& value)
 	{
 		// 若已存在，先删除旧条目
-		uint32_t uiOldIndex = FindByKey(key);
-		if (uiOldIndex < GetCount())
+		uint32_t uiOldIndex = this->FindByKey(key);
+		if (uiOldIndex < this->GetCount())
 		{
 			m_vecRank.erase(m_vecRank.begin() + uiOldIndex);
 		}
 
 		// 二分查找插入位置
-		uint32_t uiInsertPos = FindInsertPos(value);
+		uint32_t uiInsertPos = this->FindInsertPos(value);
 
 		// MaxSize 截断检查
 		if ((m_uiMaxSize > 0) && (uiInsertPos >= m_uiMaxSize))
@@ -74,7 +83,7 @@ public:
 		m_vecRank.insert(m_vecRank.begin() + uiInsertPos, stNode);
 
 		// 截断超出 MaxSize 的末尾
-		if ((m_uiMaxSize > 0) && (GetCount() > m_uiMaxSize))
+		if ((m_uiMaxSize > 0) && (this->GetCount() > m_uiMaxSize))
 		{
 			m_vecRank.pop_back();
 		}
@@ -89,8 +98,8 @@ public:
 	 */
 	bool RemoveEntry(const TKey& key)
 	{
-		uint32_t uiIndex = FindByKey(key);
-		if (uiIndex >= GetCount())
+		uint32_t uiIndex = this->FindByKey(key);
+		if (uiIndex >= this->GetCount())
 		{
 			return false;
 		}
@@ -116,8 +125,8 @@ public:
 	 */
 	uint32_t GetRank(const TKey& key) const
 	{
-		uint32_t uiIndex = FindByKey(key);
-		if (uiIndex >= GetCount())
+		uint32_t uiIndex = this->FindByKey(key);
+		if (uiIndex >= this->GetCount())
 		{
 			return 0;
 		}
@@ -132,7 +141,7 @@ public:
 	 */
 	const ST_RANK_NODE* GetEntryByRank(uint32_t uiRank) const
 	{
-		if ((uiRank == 0) || (uiRank > GetCount()))
+		if ((uiRank == 0) || (uiRank > this->GetCount()))
 		{
 			return nullptr;
 		}
@@ -149,12 +158,12 @@ public:
 	uint32_t GetTopN(uint32_t uiCount, const ST_RANK_NODE*& rpBegin) const
 	{
 		rpBegin = nullptr;
-		if ((uiCount == 0) || (GetCount() == 0))
+		if ((uiCount == 0) || (this->GetCount() == 0))
 		{
 			return 0;
 		}
 
-		uint32_t uiActual = std::min(uiCount, GetCount());
+		uint32_t uiActual = std::min(uiCount, this->GetCount());
 		rpBegin = m_vecRank.data();
 		return uiActual;
 	}
@@ -170,7 +179,7 @@ public:
 	                       const ST_RANK_NODE*& rpBegin) const
 	{
 		rpBegin = nullptr;
-		if ((uiRank == 0) || (uiRank > GetCount()) || (uiCount == 0))
+		if ((uiRank == 0) || (uiRank > this->GetCount()) || (uiCount == 0))
 		{
 			return 0;
 		}
@@ -181,7 +190,7 @@ public:
 		// 计算起始下标（防止下溢）
 		uint32_t uiStart = (uiCenterIndex > uiHalf) ? (uiCenterIndex - uiHalf) : 0;
 		// 计算结束下标（不超过总数）
-		uint32_t uiEnd = std::min(uiStart + uiCount, GetCount());
+		uint32_t uiEnd = std::min(uiStart + uiCount, this->GetCount());
 		// 若尾部不足，向前扩展起始位置
 		if ((uiEnd - uiStart) < uiCount)
 		{
@@ -199,8 +208,8 @@ public:
 	 */
 	const ST_RANK_NODE* GetEntry(const TKey& key) const
 	{
-		uint32_t uiIndex = FindByKey(key);
-		if (uiIndex >= GetCount())
+		uint32_t uiIndex = this->FindByKey(key);
+		if (uiIndex >= this->GetCount())
 		{
 			return nullptr;
 		}
@@ -225,7 +234,7 @@ private:
 	 */
 	uint32_t FindByKey(const TKey& key) const
 	{
-		for (uint32_t ui = 0; ui < GetCount(); ++ui)
+		for (uint32_t ui = 0; ui < this->GetCount(); ++ui)
 		{
 			if (m_vecRank[ui].key == key)
 			{
@@ -233,7 +242,7 @@ private:
 			}
 		}
 
-		return GetCount();
+		return this->GetCount();
 	}
 
 	/**
