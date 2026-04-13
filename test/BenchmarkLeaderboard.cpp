@@ -634,7 +634,7 @@ static void BenchUpdate(uint32_t uiScale)
 		objBoard.UpdateEntry(ui + 1, iScore);
 	}
 
-	const uint32_t OPS = std::min(uiScale, (uint32_t)1000);
+	const uint32_t OPS = std::min(uiScale, (uint32_t)10000);
 	std::uniform_int_distribution<uint64_t> distKey(1, uiScale);
 
 	// 预生成测试数据
@@ -712,7 +712,7 @@ static void BenchGetRankByKey(uint32_t uiScale)
 	for (uint32_t ui = 0; ui < uiScale; ++ui)
 		objBoard.UpdateEntry(ui + 1, distScore(rng));
 
-	const uint32_t OPS = std::min(uiScale, (uint32_t)1000);
+	const uint32_t OPS = std::min(uiScale, (uint32_t)10000);
 	std::uniform_int_distribution<uint64_t> distKey(1, uiScale);
 
 	CStopWatch sw;
@@ -739,7 +739,7 @@ static void BenchRemoveWithValue(uint32_t uiScale)
 		objBoard.UpdateEntry(ui + 1, vecScores[ui]);
 	}
 
-	const uint32_t OPS = std::min(uiScale, (uint32_t)1000);
+	const uint32_t OPS = std::min(uiScale, (uint32_t)10000);
 
 	CStopWatch sw;
 	for (uint32_t ui = 0; ui < OPS; ++ui)
@@ -758,7 +758,7 @@ static void BenchRemoveByKey(uint32_t uiScale)
 	for (uint32_t ui = 0; ui < uiScale; ++ui)
 		objBoard.UpdateEntry(ui + 1, distScore(rng));
 
-	const uint32_t OPS = std::min(uiScale, (uint32_t)1000);
+	const uint32_t OPS = std::min(uiScale, (uint32_t)10000);
 
 	CStopWatch sw;
 	for (uint32_t ui = 0; ui < OPS; ++ui)
