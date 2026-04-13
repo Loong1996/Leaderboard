@@ -77,15 +77,13 @@ static void ShowUsageExample()
 	objSimpleBoard.UpdateEntry(1004, 700);
 
 	printf("Simple board (4 players):\n");
-	const TLeaderboard<uint64_t, int64_t>::ST_RANK_NODE* pBegin = nullptr;
-	uint32_t uiCount = objSimpleBoard.GetTopN(10, pBegin);
-	for (uint32_t ui = 0; ui < uiCount; ++ui)
+	objSimpleBoard.ForeachTopN(10, [](uint32_t uiRank, const auto& stNode)
 	{
 		printf("  Rank %u: key=%llu score=%lld\n",
-		       ui + 1,
-		       static_cast<unsigned long long>(pBegin[ui].key),
-		       static_cast<long long>(pBegin[ui].value));
-	}
+		       uiRank,
+		       static_cast<unsigned long long>(stNode.key),
+		       static_cast<long long>(stNode.value));
+	});
 
 	// 多维排序排行榜（MaxSize = 3）
 	TLeaderboard<uint64_t, ST_RANK_DATA, ST_RANK_DATA_COMPARE> objMultiBoard(3);
@@ -95,17 +93,15 @@ static void ShowUsageExample()
 	objMultiBoard.UpdateEntry(4, {200, 3000, 4000});
 
 	printf("\nMulti-sort board (MaxSize=3):\n");
-	const TLeaderboard<uint64_t, ST_RANK_DATA, ST_RANK_DATA_COMPARE>::ST_RANK_NODE* pMultiBegin = nullptr;
-	uiCount = objMultiBoard.GetTopN(10, pMultiBegin);
-	for (uint32_t ui = 0; ui < uiCount; ++ui)
+	objMultiBoard.ForeachTopN(10, [](uint32_t uiRank, const auto& stNode)
 	{
 		printf("  Rank %u: key=%llu score=%lld power=%lld time=%lld\n",
-		       ui + 1,
-		       static_cast<unsigned long long>(pMultiBegin[ui].key),
-		       static_cast<long long>(pMultiBegin[ui].value.iScore),
-		       static_cast<long long>(pMultiBegin[ui].value.iFightPower),
-		       static_cast<long long>(pMultiBegin[ui].value.iTimestamp));
-	}
+		       uiRank,
+		       static_cast<unsigned long long>(stNode.key),
+		       static_cast<long long>(stNode.value.iScore),
+		       static_cast<long long>(stNode.value.iFightPower),
+		       static_cast<long long>(stNode.value.iTimestamp));
+	});
 
 	printf("\n");
 }
@@ -164,19 +160,17 @@ static void RunBenchmark()
 		       QUERY_COUNT, dbElapsed, dbElapsed / QUERY_COUNT);
 	}
 
-	// 测试 GetTopN
+	// 测试 ForeachTopN
 	{
-		const TLeaderboard<uint64_t, int64_t>::ST_RANK_NODE* pBegin = nullptr;
-
 		CStopWatch sw;
 		for (uint32_t ui = 0; ui < 10000; ++ui)
 		{
-			volatile uint32_t uiCount = objBoard.GetTopN(100, pBegin);
+			volatile uint32_t uiCount = objBoard.ForeachTopN(100, [](uint32_t, const auto&) {});
 			(void)uiCount;
 		}
 
 		double dbElapsed = sw.ElapsedMs();
-		printf("GetTopN(100) x10000: %.1f ms (avg %.3f us/op)\n",
+		printf("ForeachTopN(100) x10000: %.1f ms (avg %.3f us/op)\n",
 		       dbElapsed, dbElapsed * 1000.0 / 10000);
 	}
 
@@ -198,19 +192,17 @@ static void RunBenchmark()
 		       UPDATE_COUNT, dbElapsed, dbElapsed / UPDATE_COUNT);
 	}
 
-	// 测试 GetAroundRank
+	// 测试 ForeachAroundRank
 	{
-		const TLeaderboard<uint64_t, int64_t>::ST_RANK_NODE* pBegin = nullptr;
-
 		CStopWatch sw;
 		for (uint32_t ui = 0; ui < 10000; ++ui)
 		{
-			volatile uint32_t uiCount = objBoard.GetAroundRank(500000, 20, pBegin);
+			volatile uint32_t uiCount = objBoard.ForeachAroundRank(500000, 20, [](uint32_t, const auto&) {});
 			(void)uiCount;
 		}
 
 		double dbElapsed = sw.ElapsedMs();
-		printf("GetAroundRank(500000, 20) x10000: %.1f ms (avg %.3f us/op)\n",
+		printf("ForeachAroundRank(500000, 20) x10000: %.1f ms (avg %.3f us/op)\n",
 		       dbElapsed, dbElapsed * 1000.0 / 10000);
 	}
 }

@@ -10,6 +10,7 @@
 #include <cstdio>
 #include <cassert>
 #include <string>
+#include <vector>
 
 #include "TLeaderboard.h"
 
@@ -54,7 +55,7 @@ TEST_CASE(TestUpdateExisting)
 	assert(objBoard.GetCount() == 3);
 }
 
-TEST_CASE(TestRemoveEntry)
+TEST_CASE(TestRemoveEntryWithValue)
 {
 	TLeaderboard<uint64_t, int64_t> objBoard;
 
@@ -72,6 +73,23 @@ TEST_CASE(TestRemoveEntry)
 	assert(objBoard.RemoveEntry(9999, 0) == false);
 }
 
+TEST_CASE(TestRemoveEntryByKey)
+{
+	TLeaderboard<uint64_t, int64_t> objBoard;
+
+	objBoard.UpdateEntry(1001, 500);
+	objBoard.UpdateEntry(1002, 800);
+	objBoard.UpdateEntry(1003, 300);
+
+	assert(objBoard.RemoveEntry(1002) == true);
+	assert(objBoard.GetCount() == 2);
+	assert(objBoard.GetRank(1001, 500) == 1);
+	assert(objBoard.GetRank(1003, 300) == 2);
+
+	// 删除不存在的 key
+	assert(objBoard.RemoveEntry(9999) == false);
+}
+
 TEST_CASE(TestClear)
 {
 	TLeaderboard<uint64_t, int64_t> objBoard;
@@ -84,28 +102,34 @@ TEST_CASE(TestClear)
 	assert(objBoard.GetRank(1001, 500) == 0);
 }
 
-TEST_CASE(TestGetEntryByRank)
+TEST_CASE(TestForeachEntryByRank)
 {
 	TLeaderboard<uint64_t, int64_t> objBoard;
 
 	objBoard.UpdateEntry(1001, 500);
 	objBoard.UpdateEntry(1002, 800);
 
-	const auto* pEntry = objBoard.GetEntryByRank(1);
-	assert(pEntry != nullptr);
-	assert(pEntry->key == 1002);
-	assert(pEntry->value == 800);
+	bool bFound = objBoard.ForeachEntryByRank(1, [](uint32_t uiRank, const auto& stNode)
+	{
+		assert(uiRank == 1);
+		assert(stNode.key == 1002);
+		assert(stNode.value == 800);
+	});
+	assert(bFound == true);
 
-	const auto* pEntry2 = objBoard.GetEntryByRank(2);
-	assert(pEntry2 != nullptr);
-	assert(pEntry2->key == 1001);
+	bFound = objBoard.ForeachEntryByRank(2, [](uint32_t uiRank, const auto& stNode)
+	{
+		assert(uiRank == 2);
+		assert(stNode.key == 1001);
+	});
+	assert(bFound == true);
 
 	// 越界
-	assert(objBoard.GetEntryByRank(0) == nullptr);
-	assert(objBoard.GetEntryByRank(3) == nullptr);
+	assert(objBoard.ForeachEntryByRank(0, [](uint32_t, const auto&) {}) == false);
+	assert(objBoard.ForeachEntryByRank(3, [](uint32_t, const auto&) {}) == false);
 }
 
-TEST_CASE(TestGetTopN)
+TEST_CASE(TestForeachTopN)
 {
 	TLeaderboard<uint64_t, int64_t> objBoard;
 
@@ -114,20 +138,27 @@ TEST_CASE(TestGetTopN)
 	objBoard.UpdateEntry(1003, 300);
 	objBoard.UpdateEntry(1004, 700);
 
-	const TLeaderboard<uint64_t, int64_t>::ST_RANK_NODE* pBegin = nullptr;
-	uint32_t uiCount = objBoard.GetTopN(2, pBegin);
+	std::vector<uint64_t> vecKeys;
+	uint32_t uiCount = objBoard.ForeachTopN(2, [&vecKeys](uint32_t, const auto& stNode)
+	{
+		vecKeys.push_back(stNode.key);
+	});
 
 	assert(uiCount == 2);
-	assert(pBegin != nullptr);
-	assert(pBegin[0].key == 1002);  // 800
-	assert(pBegin[1].key == 1004);  // 700
+	assert(vecKeys.size() == 2);
+	assert(vecKeys[0] == 1002);  // 800
+	assert(vecKeys[1] == 1004);  // 700
 
 	// 请求超过总数
-	uiCount = objBoard.GetTopN(100, pBegin);
+	uiCount = objBoard.ForeachTopN(100, [](uint32_t, const auto&) {});
 	assert(uiCount == 4);
+
+	// 请求 0 个
+	uiCount = objBoard.ForeachTopN(0, [](uint32_t, const auto&) {});
+	assert(uiCount == 0);
 }
 
-TEST_CASE(TestGetAroundRank)
+TEST_CASE(TestForeachAroundRank)
 {
 	TLeaderboard<uint64_t, int64_t> objBoard;
 
@@ -139,36 +170,70 @@ TEST_CASE(TestGetAroundRank)
 
 	// 排名: 10(1000), 9(900), 8(800), 7(700), 6(600), 5(500), 4(400), 3(300), 2(200), 1(100)
 
-	const TLeaderboard<uint64_t, int64_t>::ST_RANK_NODE* pBegin = nullptr;
+	std::vector<uint64_t> vecKeys;
 
 	// 第5名附近取5个：排名3~7
-	uint32_t uiCount = objBoard.GetAroundRank(5, 5, pBegin);
+	uint32_t uiCount = objBoard.ForeachAroundRank(5, 5, [&vecKeys](uint32_t, const auto& stNode)
+	{
+		vecKeys.push_back(stNode.key);
+	});
 	assert(uiCount == 5);
-	assert(pBegin[0].key == 8);  // 排名3: 分数800
-	assert(pBegin[4].key == 4);  // 排名7: 分数400
+	assert(vecKeys[0] == 8);  // 排名3: 分数800
+	assert(vecKeys[4] == 4);  // 排名7: 分数400
 
 	// 第1名附近取5个：排名1~5
-	uiCount = objBoard.GetAroundRank(1, 5, pBegin);
+	vecKeys.clear();
+	uiCount = objBoard.ForeachAroundRank(1, 5, [&vecKeys](uint32_t, const auto& stNode)
+	{
+		vecKeys.push_back(stNode.key);
+	});
 	assert(uiCount == 5);
-	assert(pBegin[0].key == 10);  // 排名1
+	assert(vecKeys[0] == 10);  // 排名1
 
 	// 第10名附近取5个：排名6~10
-	uiCount = objBoard.GetAroundRank(10, 5, pBegin);
+	vecKeys.clear();
+	uiCount = objBoard.ForeachAroundRank(10, 5, [&vecKeys](uint32_t, const auto& stNode)
+	{
+		vecKeys.push_back(stNode.key);
+	});
 	assert(uiCount == 5);
-	assert(pBegin[4].key == 1);  // 排名10
+	assert(vecKeys[4] == 1);  // 排名10
+
+	// 越界排名
+	uiCount = objBoard.ForeachAroundRank(0, 5, [](uint32_t, const auto&) {});
+	assert(uiCount == 0);
+	uiCount = objBoard.ForeachAroundRank(11, 5, [](uint32_t, const auto&) {});
+	assert(uiCount == 0);
 }
 
-TEST_CASE(TestGetEntry)
+TEST_CASE(TestForeachEntry)
 {
 	TLeaderboard<uint64_t, int64_t> objBoard;
 
 	objBoard.UpdateEntry(1001, 500);
 
-	const auto* pEntry = objBoard.GetEntry(1001);
-	assert(pEntry != nullptr);
-	assert(pEntry->value == 500);
+	bool bFound = objBoard.ForeachEntry(1001, [](uint32_t uiRank, const auto& stNode)
+	{
+		assert(uiRank == 1);
+		assert(stNode.value == 500);
+	});
+	assert(bFound == true);
 
-	assert(objBoard.GetEntry(9999) == nullptr);
+	assert(objBoard.ForeachEntry(9999, [](uint32_t, const auto&) {}) == false);
+}
+
+TEST_CASE(TestGetRankByKey)
+{
+	TLeaderboard<uint64_t, int64_t> objBoard;
+
+	objBoard.UpdateEntry(1001, 500);
+	objBoard.UpdateEntry(1002, 800);
+	objBoard.UpdateEntry(1003, 300);
+
+	assert(objBoard.GetRank(1002) == 1);
+	assert(objBoard.GetRank(1001) == 2);
+	assert(objBoard.GetRank(1003) == 3);
+	assert(objBoard.GetRank(9999) == 0);
 }
 
 // ============================================================
@@ -210,6 +275,102 @@ TEST_CASE(TestMaxSizeUpdateExisting)
 	assert(objBoard.GetCount() == 3);
 }
 
+TEST_CASE(TestSetMaxSize)
+{
+	TLeaderboard<uint64_t, int64_t> objBoard;
+
+	objBoard.UpdateEntry(1001, 500);
+	objBoard.UpdateEntry(1002, 800);
+	objBoard.UpdateEntry(1003, 300);
+	objBoard.UpdateEntry(1004, 700);
+	objBoard.UpdateEntry(1005, 600);
+	assert(objBoard.GetCount() == 5);
+	assert(objBoard.GetMaxSize() == 0);
+
+	// 设置 MaxSize 为 3，截断末尾
+	objBoard.SetMaxSize(3);
+	assert(objBoard.GetMaxSize() == 3);
+	assert(objBoard.GetCount() == 3);
+	assert(objBoard.GetRank(1002, 800) == 1);
+	assert(objBoard.GetRank(1004, 700) == 2);
+	assert(objBoard.GetRank(1005, 600) == 3);
+	assert(objBoard.GetRank(1001, 500) == 0);  // 被截断
+	assert(objBoard.GetRank(1003, 300) == 0);  // 被截断
+
+	// 放开限制
+	objBoard.SetMaxSize(0);
+	assert(objBoard.GetMaxSize() == 0);
+	objBoard.UpdateEntry(1006, 100);
+	assert(objBoard.GetCount() == 4);
+}
+
+TEST_CASE(TestReserve)
+{
+	TLeaderboard<uint64_t, int64_t> objBoard;
+
+	// Reserve 不改变 size，只影响 capacity
+	objBoard.Reserve(1000);
+	assert(objBoard.GetCount() == 0);
+
+	objBoard.UpdateEntry(1001, 500);
+	assert(objBoard.GetCount() == 1);
+}
+
+// ============================================================
+//  同分排序测试（key 决胜）
+// ============================================================
+
+TEST_CASE(TestSameValueTieBreaking)
+{
+	TLeaderboard<uint64_t, int64_t> objBoard;
+
+	// 同分时 key 小的排前面
+	objBoard.UpdateEntry(1003, 500);
+	objBoard.UpdateEntry(1001, 500);
+	objBoard.UpdateEntry(1002, 500);
+
+	assert(objBoard.GetRank(1001, 500) == 1);
+	assert(objBoard.GetRank(1002, 500) == 2);
+	assert(objBoard.GetRank(1003, 500) == 3);
+	assert(objBoard.GetCount() == 3);
+}
+
+TEST_CASE(TestSameValueDifferentKeys)
+{
+	TLeaderboard<uint64_t, int64_t> objBoard;
+
+	// 混合不同分数和同分
+	objBoard.UpdateEntry(10, 800);
+	objBoard.UpdateEntry(20, 500);
+	objBoard.UpdateEntry(30, 500);
+	objBoard.UpdateEntry(40, 500);
+	objBoard.UpdateEntry(50, 300);
+
+	assert(objBoard.GetRank(10, 800) == 1);
+	assert(objBoard.GetRank(20, 500) == 2);
+	assert(objBoard.GetRank(30, 500) == 3);
+	assert(objBoard.GetRank(40, 500) == 4);
+	assert(objBoard.GetRank(50, 300) == 5);
+}
+
+// ============================================================
+//  UpdateEntry 返回值测试
+// ============================================================
+
+TEST_CASE(TestUpdateEntryReturnValue)
+{
+	TLeaderboard<uint64_t, int64_t> objBoard;
+
+	assert(objBoard.UpdateEntry(1001, 500) == 1);  // 第一个插入排第1
+	assert(objBoard.UpdateEntry(1002, 800) == 1);  // 更高分排第1
+	assert(objBoard.UpdateEntry(1003, 300) == 3);  // 最低分排第3
+	assert(objBoard.UpdateEntry(1004, 600) == 2);  // 中间分排第2
+
+	// 更新现有条目
+	assert(objBoard.UpdateEntry(1003, 900) == 1);  // 提升到第1
+	assert(objBoard.UpdateEntry(1003, 100) == 4);  // 降低到最后
+}
+
 // ============================================================
 //  自定义比较仿函数测试
 // ============================================================
@@ -247,6 +408,24 @@ TEST_CASE(TestCustomCompare)
 	assert(objBoard.GetRank(1002, {500, 200}) == 3);
 }
 
+TEST_CASE(TestCustomCompareRemoveAndUpdate)
+{
+	TLeaderboard<uint64_t, ST_RANK_DATA, ST_RANK_DATA_COMPARE> objBoard;
+
+	objBoard.UpdateEntry(1, {100, 10});
+	objBoard.UpdateEntry(2, {100, 20});
+	objBoard.UpdateEntry(3, {200, 30});
+
+	// 移除并验证
+	assert(objBoard.RemoveEntry(3, {200, 30}) == true);
+	assert(objBoard.GetCount() == 2);
+	assert(objBoard.GetRank(1, {100, 10}) == 1);
+
+	// 更新
+	objBoard.UpdateEntry(2, {300, 40});
+	assert(objBoard.GetRank(2, {300, 40}) == 1);
+}
+
 // ============================================================
 //  边界情况测试
 // ============================================================
@@ -257,12 +436,14 @@ TEST_CASE(TestEmptyBoard)
 
 	assert(objBoard.GetCount() == 0);
 	assert(objBoard.GetRank(1001, 0) == 0);
-	assert(objBoard.GetEntryByRank(1) == nullptr);
-	assert(objBoard.GetEntry(1001) == nullptr);
+	assert(objBoard.GetRank(1001) == 0);
+	assert(objBoard.ForeachEntryByRank(1, [](uint32_t, const auto&) {}) == false);
+	assert(objBoard.ForeachEntry(1001, [](uint32_t, const auto&) {}) == false);
+	assert(objBoard.RemoveEntry(1001) == false);
+	assert(objBoard.RemoveEntry(1001, 0) == false);
 
-	const TLeaderboard<uint64_t, int64_t>::ST_RANK_NODE* pBegin = nullptr;
-	assert(objBoard.GetTopN(10, pBegin) == 0);
-	assert(objBoard.GetAroundRank(1, 5, pBegin) == 0);
+	assert(objBoard.ForeachTopN(10, [](uint32_t, const auto&) {}) == 0);
+	assert(objBoard.ForeachAroundRank(1, 5, [](uint32_t, const auto&) {}) == 0);
 }
 
 TEST_CASE(TestSingleEntry)
@@ -273,11 +454,15 @@ TEST_CASE(TestSingleEntry)
 
 	assert(objBoard.GetCount() == 1);
 	assert(objBoard.GetRank(1001, 500) == 1);
+	assert(objBoard.GetRank(1001) == 1);
 
-	const TLeaderboard<uint64_t, int64_t>::ST_RANK_NODE* pBegin = nullptr;
-	uint32_t uiCount = objBoard.GetAroundRank(1, 5, pBegin);
+	uint64_t ulFoundKey = 0;
+	uint32_t uiCount = objBoard.ForeachAroundRank(1, 5, [&ulFoundKey](uint32_t, const auto& stNode)
+	{
+		ulFoundKey = stNode.key;
+	});
 	assert(uiCount == 1);
-	assert(pBegin[0].key == 1001);
+	assert(ulFoundKey == 1001);
 }
 
 TEST_CASE(TestStringKey)
@@ -289,6 +474,92 @@ TEST_CASE(TestStringKey)
 
 	assert(objBoard.GetRank("Bob", 800) == 1);
 	assert(objBoard.GetRank("Alice", 500) == 2);
+	assert(objBoard.GetRank("Bob") == 1);
+	assert(objBoard.GetRank("Alice") == 2);
+}
+
+TEST_CASE(TestMaxSizeOne)
+{
+	TLeaderboard<uint64_t, int64_t> objBoard(1);
+
+	assert(objBoard.UpdateEntry(1, 100) == 1);
+	assert(objBoard.GetCount() == 1);
+
+	// 更高分替换
+	assert(objBoard.UpdateEntry(2, 200) == 1);
+	assert(objBoard.GetCount() == 1);
+	assert(objBoard.GetRank(2, 200) == 1);
+	assert(objBoard.GetRank(1, 100) == 0);
+
+	// 更低分被截断
+	assert(objBoard.UpdateEntry(3, 50) == 0);
+	assert(objBoard.GetCount() == 1);
+}
+
+TEST_CASE(TestInsertRemoveReinsert)
+{
+	TLeaderboard<uint64_t, int64_t> objBoard;
+
+	objBoard.UpdateEntry(1, 100);
+	objBoard.UpdateEntry(2, 200);
+	assert(objBoard.GetCount() == 2);
+
+	objBoard.RemoveEntry(2, 200);
+	assert(objBoard.GetCount() == 1);
+
+	// 重新插入
+	objBoard.UpdateEntry(2, 300);
+	assert(objBoard.GetCount() == 2);
+	assert(objBoard.GetRank(2, 300) == 1);
+	assert(objBoard.GetRank(1, 100) == 2);
+}
+
+TEST_CASE(TestLargeScaleCorrectness)
+{
+	const uint32_t COUNT = 10000;
+	TLeaderboard<uint64_t, int64_t> objBoard;
+	objBoard.Reserve(COUNT);
+
+	// 插入 10000 个不同分数
+	for (uint64_t ui = 0; ui < COUNT; ++ui)
+	{
+		objBoard.UpdateEntry(ui, static_cast<int64_t>(ui));
+	}
+
+	assert(objBoard.GetCount() == COUNT);
+
+	// 最高分排第1
+	assert(objBoard.GetRank(COUNT - 1, static_cast<int64_t>(COUNT - 1)) == 1);
+	// 最低分排最后
+	assert(objBoard.GetRank(0, 0) == COUNT);
+
+	// 验证 TopN
+	std::vector<uint64_t> vecKeys;
+	uint32_t uiCount = objBoard.ForeachTopN(5, [&vecKeys](uint32_t, const auto& stNode)
+	{
+		vecKeys.push_back(stNode.key);
+	});
+	assert(uiCount == 5);
+	assert(vecKeys[0] == COUNT - 1);
+	assert(vecKeys[4] == COUNT - 5);
+}
+
+// ============================================================
+//  升序排行榜测试（std::less）
+// ============================================================
+
+TEST_CASE(TestAscendingOrder)
+{
+	TLeaderboard<uint64_t, int64_t, std::less<int64_t>> objBoard;
+
+	objBoard.UpdateEntry(1, 500);
+	objBoard.UpdateEntry(2, 100);
+	objBoard.UpdateEntry(3, 800);
+
+	// std::less: 值小的排前面
+	assert(objBoard.GetRank(2, 100) == 1);
+	assert(objBoard.GetRank(1, 500) == 2);
+	assert(objBoard.GetRank(3, 800) == 3);
 }
 
 // ============================================================
