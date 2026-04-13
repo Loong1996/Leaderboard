@@ -20,44 +20,6 @@
 #include <algorithm>
 #include <functional>
 
-// ============================================================
-// 包装比较器：将比较 TValue 包装为比较 ST_RANK_NODE
-// ============================================================
-
-template <typename TKey, typename TValue, typename TValueCompare>
-class TNodeCompareWrapper
-{
-public:
-	explicit TNodeCompareWrapper(const TValueCompare& fnValCmp = TValueCompare())
-		: m_fnValCmp(fnValCmp)
-	{
-	}
-
-	bool operator()(const TValue& lhsValue, const TValue& rhsValue) const
-	{
-		return m_fnValCmp(lhsValue, rhsValue);
-	}
-
-	bool operator()(const TKey& lhsKey, const TValue& lhsValue,
-	                const TKey& rhsKey, const TValue& rhsValue) const
-	{
-		// 先比较 value
-		if (m_fnValCmp(lhsValue, rhsValue))
-			return true;
-		if (m_fnValCmp(rhsValue, lhsValue))
-			return false;
-		// value 相等时用 key 决胜
-		return lhsKey < rhsKey;
-	}
-
-private:
-	TValueCompare m_fnValCmp;
-};
-
-// ============================================================
-// 主模板类
-// ============================================================
-
 template <typename TKey, typename TValue, typename TCompare = std::greater<TValue>>
 class TLeaderboard
 {
@@ -324,7 +286,19 @@ private:
 	}
 
 	/**
-	 * @brief 二分查找插入位置（仅比较 value，key 相等时作为决胜）
+	 * @brief 节点全序比较（value 优先，key 决胜）
+	 */
+	bool CompareNodes(const ST_RANK_NODE& lhs, const ST_RANK_NODE& rhs) const
+	{
+		if (this->m_fnCompare(lhs.value, rhs.value))
+			return true;
+		if (this->m_fnCompare(rhs.value, lhs.value))
+			return false;
+		return lhs.key < rhs.key;
+	}
+
+	/**
+	 * @brief 二分查找插入位置
 	 * @param [in] stNode 待插入的节点
 	 * @return 插入位置下标
 	 */
@@ -334,20 +308,14 @@ private:
 			m_vecRank.begin(), m_vecRank.end(), stNode,
 			[this](const ST_RANK_NODE& lhs, const ST_RANK_NODE& rhs)
 			{
-				// 先比较 value
-				if (m_fnCompare(lhs.value, rhs.value))
-					return true;
-				if (m_fnCompare(rhs.value, lhs.value))
-					return false;
-				// value 相等时用 key 决胜
-				return lhs.key < rhs.key;
+				return this->CompareNodes(lhs, rhs);
 			});
 
 		return static_cast<uint32_t>(it - m_vecRank.begin());
 	}
 
 	/**
-	 * @brief 二分定位 key+value 对应的下标
+	 * @brief 二分定位 key+value 对应的下标（全序比较，O(log N) 精确定位）
 	 * @param [in] stNode 包含 key 和 value 的节点
 	 * @return 下标，未找到返回 GetCount()
 	 */
@@ -357,31 +325,12 @@ private:
 			m_vecRank.begin(), m_vecRank.end(), stNode,
 			[this](const ST_RANK_NODE& lhs, const ST_RANK_NODE& rhs)
 			{
-				// 先比较 value
-				if (m_fnCompare(lhs.value, rhs.value))
-					return true;
-				if (m_fnCompare(rhs.value, lhs.value))
-					return false;
-				// value 相等时用 key 决胜
-				return lhs.key < rhs.key;
+				return this->CompareNodes(lhs, rhs);
 			});
 
-		// 在"相等区间"内线性查找匹配 key
-		while (it != m_vecRank.end())
+		if (it != m_vecRank.end() && !this->CompareNodes(*it, stNode) && !this->CompareNodes(stNode, *it))
 		{
-			// 检查是否"相等"（value 相同且 key 相同）
-			if (!m_fnCompare(it->value, stNode.value) && !m_fnCompare(stNode.value, it->value))
-			{
-				if (it->key == stNode.key)
-				{
-					return static_cast<uint32_t>(it - m_vecRank.begin());
-				}
-				++it;
-			}
-			else
-			{
-				break;
-			}
+			return static_cast<uint32_t>(it - m_vecRank.begin());
 		}
 
 		return this->GetCount();
