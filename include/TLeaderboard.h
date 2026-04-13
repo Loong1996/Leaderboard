@@ -43,6 +43,30 @@ public:
 	~TLeaderboard() = default;
 
 	/**
+	 * @brief 设置排行榜最大数量（0 表示不限制）
+	 * @param [in] uiMaxSize 最大容量
+	 */
+	void SetMaxSize(uint32_t uiMaxSize)
+	{
+		this->m_uiMaxSize = uiMaxSize;
+
+		// 截断超出新上限的末尾
+		if ((this->m_uiMaxSize > 0) && (this->GetCount() > this->m_uiMaxSize))
+		{
+			this->m_vecRank.resize(this->m_uiMaxSize);
+		}
+	}
+
+	/**
+	 * @brief 获取排行榜最大数量
+	 * @return 最大容量，0 表示不限制
+	 */
+	uint32_t GetMaxSize() const
+	{
+		return this->m_uiMaxSize;
+	}
+
+	/**
 	 * @brief 预分配内存
 	 * @param [in] uiCapacity 预分配容量
 	 */
@@ -80,14 +104,14 @@ public:
 			return 0;
 		}
 
-		// 插入新条目
-		m_vecRank.insert(m_vecRank.begin() + uiInsertPos, stNode);
-
-		// 截断超出 MaxSize 的末尾
-		if ((m_uiMaxSize > 0) && (this->GetCount() > m_uiMaxSize))
+		// 先截断末尾再插入，避免 size 短暂超过 MaxSize 触发扩容
+		if ((this->m_uiMaxSize > 0) && (this->GetCount() >= this->m_uiMaxSize))
 		{
-			m_vecRank.pop_back();
+			this->m_vecRank.pop_back();
 		}
+
+		// 插入新条目
+		this->m_vecRank.insert(this->m_vecRank.begin() + uiInsertPos, stNode);
 
 		return uiInsertPos + 1;
 	}
