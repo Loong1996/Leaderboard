@@ -78,7 +78,75 @@ public:
 	// --- 更新操作 ---
 
 	/**
-	 * @brief 插入或更新排行榜条目
+	 * @brief 插入新条目（调用方保证 key 不存在，跳过查重）
+	 * @param [in] key 玩家唯一标识
+	 * @param [in] value 排序数据
+	 * @return 新排名（1-based），0 表示未上榜（被 MaxSize 截断）
+	 * @note 若 key 已存在会导致重复条目，调用方必须自行保证唯一性
+	 */
+	uint32_t InsertEntry(const TKey& key, const TValue& value)
+	{
+		ST_RANK_NODE stNode{ key, value };
+		uint32_t uiInsertPos = this->FindInsertPos(stNode);
+
+		// MaxSize 截断检查
+		if ((this->m_uiMaxSize > 0) && (uiInsertPos >= this->m_uiMaxSize))
+		{
+			return 0;
+		}
+
+		// 先截断末尾再插入，避免 size 短暂超过 MaxSize 触发扩容
+		if ((this->m_uiMaxSize > 0) && (this->GetCount() >= this->m_uiMaxSize))
+		{
+			this->m_vecRank.pop_back();
+		}
+
+		this->m_vecRank.insert(this->m_vecRank.begin() + uiInsertPos, stNode);
+
+		return uiInsertPos + 1;
+	}
+
+	/**
+	 * @brief 插入或更新排行榜条目（调用方持有旧值时使用，O(log N) 定位）
+	 * @param [in] key 玩家唯一标识
+	 * @param [in] oldValue 旧排序数据（用于二分定位旧条目）
+	 * @param [in] newValue 新排序数据
+	 * @return 新排名（1-based），0 表示未上榜（被 MaxSize 截断）
+	 */
+	uint32_t UpdateEntry(const TKey& key, const TValue& oldValue, const TValue& newValue)
+	{
+		// 二分定位旧条目并删除
+		ST_RANK_NODE stOldNode{ key, oldValue };
+		uint32_t uiOldIndex = this->FindByNode(stOldNode);
+		if (uiOldIndex < this->GetCount())
+		{
+			this->m_vecRank.erase(this->m_vecRank.begin() + uiOldIndex);
+		}
+
+		// 构造新节点，二分查找插入位置
+		ST_RANK_NODE stNewNode{ key, newValue };
+		uint32_t uiInsertPos = this->FindInsertPos(stNewNode);
+
+		// MaxSize 截断检查
+		if ((this->m_uiMaxSize > 0) && (uiInsertPos >= this->m_uiMaxSize))
+		{
+			return 0;
+		}
+
+		// 先截断末尾再插入，避免 size 短暂超过 MaxSize 触发扩容
+		if ((this->m_uiMaxSize > 0) && (this->GetCount() >= this->m_uiMaxSize))
+		{
+			this->m_vecRank.pop_back();
+		}
+
+		// 插入新条目
+		this->m_vecRank.insert(this->m_vecRank.begin() + uiInsertPos, stNewNode);
+
+		return uiInsertPos + 1;
+	}
+
+	/**
+	 * @brief 插入或更新排行榜条目（无旧值时使用，O(N) 线性扫描）
 	 * @param [in] key 玩家唯一标识
 	 * @param [in] value 排序数据
 	 * @return 新排名（1-based），0 表示未上榜（被 MaxSize 截断）

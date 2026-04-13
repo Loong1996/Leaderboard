@@ -594,10 +594,27 @@ static void BenchInsert(uint32_t uiScale)
 	std::vector<int64_t> vecScores(uiScale);
 	for (auto& s : vecScores) s = dist(rng);
 
-	CStopWatch sw;
-	for (uint32_t ui = 0; ui < uiScale; ++ui)
-		objBoard.UpdateEntry(ui + 1, vecScores[ui]);
-	AddResult("UpdateEntry (插入新条目)", uiScale, uiScale, sw.ElapsedMs());
+	// UpdateEntry：每次 FindByKey O(N) 查重
+	{
+		TLeaderboard<uint64_t, int64_t> objBoardCopy;
+		objBoardCopy.Reserve(uiScale);
+
+		CStopWatch sw;
+		for (uint32_t ui = 0; ui < uiScale; ++ui)
+			objBoardCopy.UpdateEntry(ui + 1, vecScores[ui]);
+		AddResult("UpdateEntry (插入新条目)", uiScale, uiScale, sw.ElapsedMs());
+	}
+
+	// InsertEntry：跳过查重，直接二分插入
+	{
+		TLeaderboard<uint64_t, int64_t> objBoardCopy;
+		objBoardCopy.Reserve(uiScale);
+
+		CStopWatch sw;
+		for (uint32_t ui = 0; ui < uiScale; ++ui)
+			objBoardCopy.InsertEntry(ui + 1, vecScores[ui]);
+		AddResult("InsertEntry (插入新条目)", uiScale, uiScale, sw.ElapsedMs());
+	}
 }
 
 static void BenchUpdate(uint32_t uiScale)
@@ -608,16 +625,52 @@ static void BenchUpdate(uint32_t uiScale)
 	std::mt19937 rng(42);
 	std::uniform_int_distribution<int64_t> distScore(0, 10000000);
 
+	// 记录每个 key 的当前 value，用于三参数重载
+	std::vector<int64_t> vecValues(uiScale + 1, 0);
 	for (uint32_t ui = 0; ui < uiScale; ++ui)
-		objBoard.UpdateEntry(ui + 1, distScore(rng));
+	{
+		int64_t iScore = distScore(rng);
+		vecValues[ui + 1] = iScore;
+		objBoard.UpdateEntry(ui + 1, iScore);
+	}
 
 	const uint32_t OPS = std::min(uiScale, (uint32_t)1000);
 	std::uniform_int_distribution<uint64_t> distKey(1, uiScale);
 
-	CStopWatch sw;
+	// 预生成测试数据
+	std::vector<uint64_t> vecKeys(OPS);
+	std::vector<int64_t> vecNewValues(OPS);
 	for (uint32_t ui = 0; ui < OPS; ++ui)
-		objBoard.UpdateEntry(distKey(rng), distScore(rng));
-	AddResult("UpdateEntry (更新已有)", uiScale, OPS, sw.ElapsedMs());
+	{
+		vecKeys[ui] = distKey(rng);
+		vecNewValues[ui] = distScore(rng);
+	}
+
+	// 旧版：无旧值，O(N) 线性扫描
+	{
+		auto objBoardCopy = objBoard;
+		auto vecValuesCopy = vecValues;
+		CStopWatch sw;
+		for (uint32_t ui = 0; ui < OPS; ++ui)
+		{
+			objBoardCopy.UpdateEntry(vecKeys[ui], vecNewValues[ui]);
+			vecValuesCopy[vecKeys[ui]] = vecNewValues[ui];
+		}
+		AddResult("UpdateEntry (更新已有, 无旧值)", uiScale, OPS, sw.ElapsedMs());
+	}
+
+	// 新版：有旧值，O(log N) 二分定位
+	{
+		auto objBoardCopy = objBoard;
+		auto vecValuesCopy = vecValues;
+		CStopWatch sw;
+		for (uint32_t ui = 0; ui < OPS; ++ui)
+		{
+			objBoardCopy.UpdateEntry(vecKeys[ui], vecValuesCopy[vecKeys[ui]], vecNewValues[ui]);
+			vecValuesCopy[vecKeys[ui]] = vecNewValues[ui];
+		}
+		AddResult("UpdateEntry (更新已有, 有旧值)", uiScale, OPS, sw.ElapsedMs());
+	}
 }
 
 static void BenchGetRankWithValue(uint32_t uiScale)
@@ -996,7 +1049,9 @@ tr:hover td { background: #f7f8fa; }
     <table>
       <thead><tr><th>操作</th><th>时间复杂度</th><th>说明</th></tr></thead>
       <tbody>
-        <tr><td>UpdateEntry</td><td><span class="complexity-tag n">O(N)</span></td><td>线性查找旧条目 + 二分定位插入位置 + 数组移动</td></tr>
+        <tr><td>InsertEntry (新插入)</td><td><span class="complexity-tag n">O(log N + N)</span></td><td>二分定位插入位置 + 数组移动，跳过查重</td></tr>
+        <tr><td>UpdateEntry (无旧值)</td><td><span class="complexity-tag n">O(N)</span></td><td>线性查找旧条目 + 二分定位插入位置 + 数组移动</td></tr>
+        <tr><td>UpdateEntry (有旧值)</td><td><span class="complexity-tag n">O(log N + N)</span></td><td>二分定位旧条目 + 二分定位插入位置 + 数组移动</td></tr>
         <tr><td>GetRank (key+value)</td><td><span class="complexity-tag logn">O(log N)</span></td><td>全序比较器二分精确定位</td></tr>
         <tr><td>GetRank (仅 key)</td><td><span class="complexity-tag n">O(N)</span></td><td>线性扫描匹配 key</td></tr>
         <tr><td>RemoveEntry (key+value)</td><td><span class="complexity-tag n">O(log N + N)</span></td><td>二分定位 O(log N) + 数组移动 O(N)</td></tr>
