@@ -5,7 +5,7 @@
  * @details
  *     百万级实时排行榜模板类。
  *     基于有序 vector 实现，支持自定义排序规则。
- *     查询操作 O(1)（ForeachEntryByRank），O(K)（ForeachTopN / ForeachAroundRank，K 为遍历数量），
+ *     查询操作 O(1)（ForeachEntryByRank），O(K)（ForeachEntries，K 为请求数量），
  *     更新操作 O(N)（UpdateEntry / RemoveEntry），
  *     GetRank/RemoveEntry: O(log N + K)（传入 value 时二分定位，K 为相等区间大小）
  *     TKey:     玩家唯一标识类型（如 uint64_t，须支持 operator<）
@@ -184,55 +184,22 @@ public:
 	}
 
 	/**
-	 * @brief 遍历 Top N
+	 * @brief 遍历指定排名区间的条目
+	 * @param [in] uiStartRank 起始排名（1-based）
 	 * @param [in] uiCount 请求数量
 	 * @param [in] fn 回调函数 void(uint32_t uiRank, const ST_RANK_NODE& stNode)
 	 * @return 实际遍历数量
 	 */
 	template <typename TFunc>
-	uint32_t ForeachTopN(uint32_t uiCount, TFunc fn) const
+	uint32_t ForeachEntries(uint32_t uiStartRank, uint32_t uiCount, TFunc fn) const
 	{
-		if (uiCount == 0)
+		if ((uiStartRank == 0) || (uiStartRank > this->GetCount()) || (uiCount == 0))
 		{
 			return 0;
 		}
 
-		uint32_t uiActual = std::min(uiCount, this->GetCount());
-		for (uint32_t ui = 0; ui < uiActual; ++ui)
-		{
-			fn(ui + 1, m_vecRank[ui]);
-		}
-		return uiActual;
-	}
-
-	/**
-	 * @brief 遍历某排名附近的玩家
-	 * @param [in] uiRank 中心排名（1-based）
-	 * @param [in] uiCount 请求总数量（以中心排名为基准向前取 uiCount/2，向后补足；靠近边界时窗口整体平移）
-	 * @param [in] fn 回调函数 void(uint32_t uiRank, const ST_RANK_NODE& stNode)
-	 * @return 实际遍历数量
-	 */
-	template <typename TFunc>
-	uint32_t ForeachAroundRank(uint32_t uiRank, uint32_t uiCount, TFunc fn) const
-	{
-		if ((uiRank == 0) || (uiRank > this->GetCount()) || (uiCount == 0))
-		{
-			return 0;
-		}
-
-		uint32_t uiHalf = uiCount / 2;
-		uint32_t uiCenterIndex = uiRank - 1;
-
-		// 计算起始下标（防止下溢）
-		uint32_t uiStart = (uiCenterIndex > uiHalf) ? (uiCenterIndex - uiHalf) : 0;
-		// 计算结束下标（不超过总数）
+		uint32_t uiStart = uiStartRank - 1;
 		uint32_t uiEnd = std::min(uiStart + uiCount, this->GetCount());
-		// 若尾部不足，向前扩展起始位置
-		if ((uiEnd - uiStart) < uiCount)
-		{
-			uiStart = (uiEnd > uiCount) ? (uiEnd - uiCount) : 0;
-		}
-
 		for (uint32_t ui = uiStart; ui < uiEnd; ++ui)
 		{
 			fn(ui + 1, m_vecRank[ui]);
@@ -241,13 +208,13 @@ public:
 	}
 
 	/**
-	 * @brief 按 key 访问节点（O(N) 线性扫描）
+	 * @brief 按 key 获取节点及其排名（O(N) 线性扫描）
 	 * @param [in] key 玩家唯一标识
-	 * @param [in] fn 回调函数 void(uint32_t uiRank, const ST_RANK_NODE& stNode)
-	 * @return 是否找到并调用了回调
+	 * @param [out] uiOutRank 排名（1-based）
+	 * @param [out] stOutNode 节点数据
+	 * @return 是否找到
 	 */
-	template <typename TFunc>
-	bool ForeachEntry(const TKey& key, TFunc fn) const
+	bool GetEntry(const TKey& key, uint32_t& uiOutRank, ST_RANK_NODE& stOutNode) const
 	{
 		uint32_t uiIndex = this->FindByKey(key);
 		if (uiIndex >= this->GetCount())
@@ -255,7 +222,8 @@ public:
 			return false;
 		}
 
-		fn(uiIndex + 1, m_vecRank[uiIndex]);
+		uiOutRank = uiIndex + 1;
+		stOutNode = m_vecRank[uiIndex];
 		return true;
 	}
 

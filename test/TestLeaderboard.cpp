@@ -129,7 +129,7 @@ TEST_CASE(TestForeachEntryByRank)
 	assert(objBoard.ForeachEntryByRank(3, [](uint32_t, const auto&) {}) == false);
 }
 
-TEST_CASE(TestForeachTopN)
+TEST_CASE(TestForeachEntries)
 {
 	TLeaderboard<uint64_t, int64_t> objBoard;
 
@@ -138,88 +138,56 @@ TEST_CASE(TestForeachTopN)
 	objBoard.UpdateEntry(1003, 300);
 	objBoard.UpdateEntry(1004, 700);
 
+	// 排名: 1002(800), 1004(700), 1001(500), 1003(300)
+
+	// Top 2
 	std::vector<uint64_t> vecKeys;
-	uint32_t uiCount = objBoard.ForeachTopN(2, [&vecKeys](uint32_t, const auto& stNode)
+	uint32_t uiCount = objBoard.ForeachEntries(1, 2, [&vecKeys](uint32_t, const auto& stNode)
 	{
 		vecKeys.push_back(stNode.key);
 	});
-
 	assert(uiCount == 2);
-	assert(vecKeys.size() == 2);
 	assert(vecKeys[0] == 1002);  // 800
 	assert(vecKeys[1] == 1004);  // 700
 
 	// 请求超过总数
-	uiCount = objBoard.ForeachTopN(100, [](uint32_t, const auto&) {});
+	uiCount = objBoard.ForeachEntries(1, 100, [](uint32_t, const auto&) {});
 	assert(uiCount == 4);
 
+	// 中间区间
+	vecKeys.clear();
+	uiCount = objBoard.ForeachEntries(2, 2, [&vecKeys](uint32_t, const auto& stNode)
+	{
+		vecKeys.push_back(stNode.key);
+	});
+	assert(uiCount == 2);
+	assert(vecKeys[0] == 1004);  // 排名2
+	assert(vecKeys[1] == 1001);  // 排名3
+
+	// 起始排名超出
+	assert(objBoard.ForeachEntries(5, 1, [](uint32_t, const auto&) {}) == 0);
+
 	// 请求 0 个
-	uiCount = objBoard.ForeachTopN(0, [](uint32_t, const auto&) {});
-	assert(uiCount == 0);
+	assert(objBoard.ForeachEntries(1, 0, [](uint32_t, const auto&) {}) == 0);
+
+	// 起始排名 0
+	assert(objBoard.ForeachEntries(0, 1, [](uint32_t, const auto&) {}) == 0);
 }
 
-TEST_CASE(TestForeachAroundRank)
-{
-	TLeaderboard<uint64_t, int64_t> objBoard;
-
-	// 插入 10 个玩家，分数 100~1000
-	for (uint64_t ui = 1; ui <= 10; ++ui)
-	{
-		objBoard.UpdateEntry(ui, static_cast<int64_t>(ui * 100));
-	}
-
-	// 排名: 10(1000), 9(900), 8(800), 7(700), 6(600), 5(500), 4(400), 3(300), 2(200), 1(100)
-
-	std::vector<uint64_t> vecKeys;
-
-	// 第5名附近取5个：排名3~7
-	uint32_t uiCount = objBoard.ForeachAroundRank(5, 5, [&vecKeys](uint32_t, const auto& stNode)
-	{
-		vecKeys.push_back(stNode.key);
-	});
-	assert(uiCount == 5);
-	assert(vecKeys[0] == 8);  // 排名3: 分数800
-	assert(vecKeys[4] == 4);  // 排名7: 分数400
-
-	// 第1名附近取5个：排名1~5
-	vecKeys.clear();
-	uiCount = objBoard.ForeachAroundRank(1, 5, [&vecKeys](uint32_t, const auto& stNode)
-	{
-		vecKeys.push_back(stNode.key);
-	});
-	assert(uiCount == 5);
-	assert(vecKeys[0] == 10);  // 排名1
-
-	// 第10名附近取5个：排名6~10
-	vecKeys.clear();
-	uiCount = objBoard.ForeachAroundRank(10, 5, [&vecKeys](uint32_t, const auto& stNode)
-	{
-		vecKeys.push_back(stNode.key);
-	});
-	assert(uiCount == 5);
-	assert(vecKeys[4] == 1);  // 排名10
-
-	// 越界排名
-	uiCount = objBoard.ForeachAroundRank(0, 5, [](uint32_t, const auto&) {});
-	assert(uiCount == 0);
-	uiCount = objBoard.ForeachAroundRank(11, 5, [](uint32_t, const auto&) {});
-	assert(uiCount == 0);
-}
-
-TEST_CASE(TestForeachEntry)
+TEST_CASE(TestGetEntry)
 {
 	TLeaderboard<uint64_t, int64_t> objBoard;
 
 	objBoard.UpdateEntry(1001, 500);
 
-	bool bFound = objBoard.ForeachEntry(1001, [](uint32_t uiRank, const auto& stNode)
-	{
-		assert(uiRank == 1);
-		assert(stNode.value == 500);
-	});
-	assert(bFound == true);
+	uint32_t uiRank = 0;
+	TLeaderboard<uint64_t, int64_t>::ST_RANK_NODE stNode{};
 
-	assert(objBoard.ForeachEntry(9999, [](uint32_t, const auto&) {}) == false);
+	assert(objBoard.GetEntry(1001, uiRank, stNode) == true);
+	assert(uiRank == 1);
+	assert(stNode.value == 500);
+
+	assert(objBoard.GetEntry(9999, uiRank, stNode) == false);
 }
 
 TEST_CASE(TestGetRankByKey)
@@ -438,12 +406,16 @@ TEST_CASE(TestEmptyBoard)
 	assert(objBoard.GetRank(1001, 0) == 0);
 	assert(objBoard.GetRank(1001) == 0);
 	assert(objBoard.ForeachEntryByRank(1, [](uint32_t, const auto&) {}) == false);
-	assert(objBoard.ForeachEntry(1001, [](uint32_t, const auto&) {}) == false);
+	{
+		uint32_t uiRank = 0;
+		TLeaderboard<uint64_t, int64_t>::ST_RANK_NODE stNode{};
+		assert(objBoard.GetEntry(1001, uiRank, stNode) == false);
+	}
 	assert(objBoard.RemoveEntry(1001) == false);
 	assert(objBoard.RemoveEntry(1001, 0) == false);
 
-	assert(objBoard.ForeachTopN(10, [](uint32_t, const auto&) {}) == 0);
-	assert(objBoard.ForeachAroundRank(1, 5, [](uint32_t, const auto&) {}) == 0);
+	assert(objBoard.ForeachEntries(1, 10, [](uint32_t, const auto&) {}) == 0);
+	assert(objBoard.ForeachEntries(0, 5, [](uint32_t, const auto&) {}) == 0);
 }
 
 TEST_CASE(TestSingleEntry)
@@ -457,7 +429,7 @@ TEST_CASE(TestSingleEntry)
 	assert(objBoard.GetRank(1001) == 1);
 
 	uint64_t ulFoundKey = 0;
-	uint32_t uiCount = objBoard.ForeachAroundRank(1, 5, [&ulFoundKey](uint32_t, const auto& stNode)
+	uint32_t uiCount = objBoard.ForeachEntries(1, 5, [&ulFoundKey](uint32_t, const auto& stNode)
 	{
 		ulFoundKey = stNode.key;
 	});
@@ -533,9 +505,9 @@ TEST_CASE(TestLargeScaleCorrectness)
 	// 最低分排最后
 	assert(objBoard.GetRank(0, 0) == COUNT);
 
-	// 验证 TopN
+	// 验证 Top 5
 	std::vector<uint64_t> vecKeys;
-	uint32_t uiCount = objBoard.ForeachTopN(5, [&vecKeys](uint32_t, const auto& stNode)
+	uint32_t uiCount = objBoard.ForeachEntries(1, 5, [&vecKeys](uint32_t, const auto& stNode)
 	{
 		vecKeys.push_back(stNode.key);
 	});

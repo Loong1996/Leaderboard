@@ -240,67 +240,63 @@ static void Test_GetTopN()
 	objBoard.UpdateEntry(1003, 300);
 	objBoard.UpdateEntry(1004, 700);
 
+	// 排名: 1002(800), 1004(700), 1001(500), 1003(300)
 	std::vector<uint64_t> vecKeys;
-	uint32_t uiCount = objBoard.ForeachTopN(2, [&vecKeys](uint32_t, const auto& stNode)
+	uint32_t uiCount = objBoard.ForeachEntries(1, 2, [&vecKeys](uint32_t, const auto& stNode)
 	{
 		vecKeys.push_back(stNode.key);
 	});
 	CHECK(uiCount == 2);
-	CHECK(vecKeys.size() == 2);
 	CHECK(vecKeys[0] == 1002);
 	CHECK(vecKeys[1] == 1004);
-	uiCount = objBoard.ForeachTopN(100, [](uint32_t, const auto&) {});
-	CHECK(uiCount == 4);
-	uiCount = objBoard.ForeachTopN(0, [](uint32_t, const auto&) {});
-	CHECK(uiCount == 0);
+	CHECK(objBoard.ForeachEntries(1, 100, [](uint32_t, const auto&) {}) == 4);
+	CHECK(objBoard.ForeachEntries(1, 0, [](uint32_t, const auto&) {}) == 0);
 }
 
-static void Test_GetAroundRank()
+static void Test_GetEntries()
 {
 	TLeaderboard<uint64_t, int64_t> objBoard;
 	for (uint64_t ui = 1; ui <= 10; ++ui)
 		objBoard.UpdateEntry(ui, static_cast<int64_t>(ui * 100));
 
+	// 排名: 10(1000), 9(900), 8(800), 7(700), 6(600), 5(500), 4(400), 3(300), 2(200), 1(100)
+
+	// 第3名起取5个
 	std::vector<uint64_t> vecKeys;
-	uint32_t uiCount = objBoard.ForeachAroundRank(5, 5, [&vecKeys](uint32_t, const auto& stNode)
+	uint32_t uiCount = objBoard.ForeachEntries(3, 5, [&vecKeys](uint32_t, const auto& stNode)
 	{
 		vecKeys.push_back(stNode.key);
 	});
 	CHECK(uiCount == 5);
-	CHECK(vecKeys[0] == 8);
-	CHECK(vecKeys[4] == 4);
+	CHECK(vecKeys[0] == 8);  // 排名3: 分数800
+	CHECK(vecKeys[4] == 4);  // 排名7: 分数400
 
+	// 起始排名超出边界
+	CHECK(objBoard.ForeachEntries(0, 5, [](uint32_t, const auto&) {}) == 0);
+	CHECK(objBoard.ForeachEntries(11, 5, [](uint32_t, const auto&) {}) == 0);
+
+	// 尾部截断
 	vecKeys.clear();
-	uiCount = objBoard.ForeachAroundRank(1, 5, [&vecKeys](uint32_t, const auto& stNode)
+	uiCount = objBoard.ForeachEntries(8, 5, [&vecKeys](uint32_t, const auto& stNode)
 	{
 		vecKeys.push_back(stNode.key);
 	});
-	CHECK(uiCount == 5);
-	CHECK(vecKeys[0] == 10);
-
-	vecKeys.clear();
-	uiCount = objBoard.ForeachAroundRank(10, 5, [&vecKeys](uint32_t, const auto& stNode)
-	{
-		vecKeys.push_back(stNode.key);
-	});
-	CHECK(uiCount == 5);
-	CHECK(vecKeys[4] == 1);
-
-	CHECK(objBoard.ForeachAroundRank(0, 5, [](uint32_t, const auto&) {}) == 0);
-	CHECK(objBoard.ForeachAroundRank(11, 5, [](uint32_t, const auto&) {}) == 0);
+	CHECK(uiCount == 3);
+	CHECK(vecKeys[2] == 1);  // 排名10
 }
 
 static void Test_GetEntry()
 {
 	TLeaderboard<uint64_t, int64_t> objBoard;
 	objBoard.UpdateEntry(1001, 500);
-	bool bFound = objBoard.ForeachEntry(1001, [](uint32_t uiRank, const auto& stNode)
-	{
-		CHECK(uiRank == 1);
-		CHECK(stNode.value == 500);
-	});
-	CHECK(bFound == true);
-	CHECK(objBoard.ForeachEntry(9999, [](uint32_t, const auto&) {}) == false);
+
+	uint32_t uiRank = 0;
+	TLeaderboard<uint64_t, int64_t>::ST_RANK_NODE stNode{};
+
+	CHECK(objBoard.GetEntry(1001, uiRank, stNode) == true);
+	CHECK(uiRank == 1);
+	CHECK(stNode.value == 500);
+	CHECK(objBoard.GetEntry(9999, uiRank, stNode) == false);
 }
 
 static void Test_MaxSize()
@@ -433,11 +429,15 @@ static void Test_EmptyBoard()
 	CHECK(objBoard.GetRank(1001, 0) == 0);
 	CHECK(objBoard.GetRank(1001) == 0);
 	CHECK(objBoard.ForeachEntryByRank(1, [](uint32_t, const auto&) {}) == false);
-	CHECK(objBoard.ForeachEntry(1001, [](uint32_t, const auto&) {}) == false);
+	{
+		uint32_t uiRank = 0;
+		TLeaderboard<uint64_t, int64_t>::ST_RANK_NODE stNode{};
+		CHECK(objBoard.GetEntry(1001, uiRank, stNode) == false);
+	}
 	CHECK(objBoard.RemoveEntry(1001) == false);
 	CHECK(objBoard.RemoveEntry(1001, 0) == false);
-	CHECK(objBoard.ForeachTopN(10, [](uint32_t, const auto&) {}) == 0);
-	CHECK(objBoard.ForeachAroundRank(1, 5, [](uint32_t, const auto&) {}) == 0);
+	CHECK(objBoard.ForeachEntries(1, 10, [](uint32_t, const auto&) {}) == 0);
+	CHECK(objBoard.ForeachEntries(0, 5, [](uint32_t, const auto&) {}) == 0);
 }
 
 static void Test_SingleEntry()
@@ -448,7 +448,7 @@ static void Test_SingleEntry()
 	CHECK(objBoard.GetRank(1001, 500) == 1);
 	CHECK(objBoard.GetRank(1001) == 1);
 	uint64_t ulFoundKey = 0;
-	uint32_t uiCount = objBoard.ForeachAroundRank(1, 5, [&ulFoundKey](uint32_t, const auto& stNode)
+	uint32_t uiCount = objBoard.ForeachEntries(1, 5, [&ulFoundKey](uint32_t, const auto& stNode)
 	{
 		ulFoundKey = stNode.key;
 	});
@@ -488,7 +488,7 @@ static void Test_LargeScale()
 	CHECK(objBoard.GetRank(COUNT - 1, static_cast<int64_t>(COUNT - 1)) == 1);
 	CHECK(objBoard.GetRank(0, 0) == COUNT);
 	std::vector<uint64_t> vecKeys;
-	uint32_t uiCount = objBoard.ForeachTopN(5, [&vecKeys](uint32_t, const auto& stNode)
+	uint32_t uiCount = objBoard.ForeachEntries(1, 5, [&vecKeys](uint32_t, const auto& stNode)
 	{
 		vecKeys.push_back(stNode.key);
 	});
@@ -517,7 +517,7 @@ static void RunUnitTests()
 	printf("\n[查询操作]\n");
 	RUN_TEST("查询操作", "按排名获取节点",        Test_GetEntryByRank);
 	RUN_TEST("查询操作", "获取 TopN",             Test_GetTopN);
-	RUN_TEST("查询操作", "获取排名附近玩家",      Test_GetAroundRank);
+	RUN_TEST("查询操作", "获取排名区间",          Test_GetEntries);
 	RUN_TEST("查询操作", "按 key 查找节点",       Test_GetEntry);
 
 	printf("\n[MaxSize 截断]\n");
@@ -766,7 +766,7 @@ static void BenchRemoveByKey(uint32_t uiScale)
 	AddResult("RemoveEntry (仅 key, O(N))", uiScale, OPS, sw.ElapsedMs());
 }
 
-static void BenchForeachTopN(uint32_t uiScale)
+static void BenchForeachEntriesTop(uint32_t uiScale)
 {
 	TLeaderboard<uint64_t, int64_t> objBoard;
 	objBoard.Reserve(uiScale);
@@ -782,13 +782,13 @@ static void BenchForeachTopN(uint32_t uiScale)
 	CStopWatch sw;
 	for (uint32_t ui = 0; ui < OPS; ++ui)
 	{
-		volatile uint32_t r = objBoard.ForeachTopN(100, [](uint32_t, const auto&) {});
+		volatile uint32_t r = objBoard.ForeachEntries(1, 100, [](uint32_t, const auto&) {});
 		(void)r;
 	}
-	AddResult("ForeachTopN(100)", uiScale, OPS, sw.ElapsedMs());
+	AddResult("ForeachEntries(1, 100)", uiScale, OPS, sw.ElapsedMs());
 }
 
-static void BenchForeachAroundRank(uint32_t uiScale)
+static void BenchForeachEntriesMid(uint32_t uiScale)
 {
 	TLeaderboard<uint64_t, int64_t> objBoard;
 	objBoard.Reserve(uiScale);
@@ -800,15 +800,15 @@ static void BenchForeachAroundRank(uint32_t uiScale)
 		objBoard.UpdateEntry(ui + 1, distScore(rng));
 
 	const uint32_t OPS = 100000;
-	uint32_t uiCenter = uiScale / 2;
+	uint32_t uiStart = uiScale / 2;
 
 	CStopWatch sw;
 	for (uint32_t ui = 0; ui < OPS; ++ui)
 	{
-		volatile uint32_t r = objBoard.ForeachAroundRank(uiCenter, 20, [](uint32_t, const auto&) {});
+		volatile uint32_t r = objBoard.ForeachEntries(uiStart, 20, [](uint32_t, const auto&) {});
 		(void)r;
 	}
-	AddResult("ForeachAroundRank(center, 20)", uiScale, OPS, sw.ElapsedMs());
+	AddResult("ForeachEntries(mid, 20)", uiScale, OPS, sw.ElapsedMs());
 }
 
 static void BenchForeachEntryByRank(uint32_t uiScale)
@@ -852,8 +852,8 @@ static void RunBenchmarks()
 		BenchGetRankByKey(uiScale);
 		BenchRemoveWithValue(uiScale);
 		BenchRemoveByKey(uiScale);
-		BenchForeachTopN(uiScale);
-		BenchForeachAroundRank(uiScale);
+		BenchForeachEntriesTop(uiScale);
+		BenchForeachEntriesMid(uiScale);
 		BenchForeachEntryByRank(uiScale);
 
 		printf("\n");

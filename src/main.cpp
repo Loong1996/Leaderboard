@@ -77,7 +77,7 @@ static void ShowUsageExample()
 	objSimpleBoard.UpdateEntry(1004, 700);
 
 	printf("Simple board (4 players):\n");
-	objSimpleBoard.ForeachTopN(10, [](uint32_t uiRank, const auto& stNode)
+	objSimpleBoard.ForeachEntries(1, 10, [](uint32_t uiRank, const auto& stNode)
 	{
 		printf("  Rank %u: key=%llu score=%lld\n",
 		       uiRank,
@@ -93,7 +93,7 @@ static void ShowUsageExample()
 	objMultiBoard.UpdateEntry(4, {200, 3000, 4000});
 
 	printf("\nMulti-sort board (MaxSize=3):\n");
-	objMultiBoard.ForeachTopN(10, [](uint32_t uiRank, const auto& stNode)
+	objMultiBoard.ForeachEntries(1, 10, [](uint32_t uiRank, const auto& stNode)
 	{
 		printf("  Rank %u: key=%llu score=%lld power=%lld time=%lld\n",
 		       uiRank,
@@ -160,17 +160,17 @@ static void RunBenchmark()
 		       QUERY_COUNT, dbElapsed, dbElapsed / QUERY_COUNT);
 	}
 
-	// 测试 ForeachTopN
+	// 测试 ForeachEntries（Top 100）
 	{
 		CStopWatch sw;
 		for (uint32_t ui = 0; ui < 10000; ++ui)
 		{
-			volatile uint32_t uiCount = objBoard.ForeachTopN(100, [](uint32_t, const auto&) {});
+			volatile uint32_t uiCount = objBoard.ForeachEntries(1, 100, [](uint32_t, const auto&) {});
 			(void)uiCount;
 		}
 
 		double dbElapsed = sw.ElapsedMs();
-		printf("ForeachTopN(100) x10000: %.1f ms (avg %.3f us/op)\n",
+		printf("ForeachEntries(1, 100) x10000: %.1f ms (avg %.3f us/op)\n",
 		       dbElapsed, dbElapsed * 1000.0 / 10000);
 	}
 
@@ -192,17 +192,17 @@ static void RunBenchmark()
 		       UPDATE_COUNT, dbElapsed, dbElapsed / UPDATE_COUNT);
 	}
 
-	// 测试 ForeachAroundRank
+	// 测试 ForeachEntries（中间区间）
 	{
 		CStopWatch sw;
 		for (uint32_t ui = 0; ui < 10000; ++ui)
 		{
-			volatile uint32_t uiCount = objBoard.ForeachAroundRank(500000, 20, [](uint32_t, const auto&) {});
+			volatile uint32_t uiCount = objBoard.ForeachEntries(50000, 20, [](uint32_t, const auto&) {});
 			(void)uiCount;
 		}
 
 		double dbElapsed = sw.ElapsedMs();
-		printf("ForeachAroundRank(500000, 20) x10000: %.1f ms (avg %.3f us/op)\n",
+		printf("ForeachEntries(50000, 20) x10000: %.1f ms (avg %.3f us/op)\n",
 		       dbElapsed, dbElapsed * 1000.0 / 10000);
 	}
 }
