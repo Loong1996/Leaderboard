@@ -8,7 +8,7 @@
  *     查询操作 O(1)（ForeachTopN / ForeachAroundRank / ForeachEntryByRank），
  *     更新操作 O(N)（UpdateEntry / RemoveEntry），
  *     GetRank/RemoveEntry: O(log N + K)（传入 value 时二分定位，K 为相等区间大小）
- *     TKey:     玩家唯一标识类型（如 uint64_t）
+ *     TKey:     玩家唯一标识类型（如 uint64_t，须支持 operator<）
  *     TValue:   排序数据类型（POD 结构体、基础类型或指针均可）
  *     TCompare: 比较仿函数，默认 std::greater<TValue>（仅比较 value），
  *               若需含 key 的全序比较，自定义 TKeyCompare
@@ -31,8 +31,6 @@ public:
 		TValue value;
 	};
 
-	using VEC_RANK_NODE = std::vector<ST_RANK_NODE>;
-
 public:
 	explicit TLeaderboard(uint32_t uiMaxSize = 0, TCompare fnCompare = TCompare())
 		: m_fnCompare(fnCompare)
@@ -48,12 +46,12 @@ public:
 	 */
 	void SetMaxSize(uint32_t uiMaxSize)
 	{
-		this->m_uiMaxSize = uiMaxSize;
+		m_uiMaxSize = uiMaxSize;
 
 		// 截断超出新上限的末尾
-		if ((this->m_uiMaxSize > 0) && (this->GetCount() > this->m_uiMaxSize))
+		if ((m_uiMaxSize > 0) && (this->GetCount() > m_uiMaxSize))
 		{
-			this->m_vecRank.resize(this->m_uiMaxSize);
+			m_vecRank.resize(m_uiMaxSize);
 		}
 	}
 
@@ -63,7 +61,7 @@ public:
 	 */
 	uint32_t GetMaxSize() const
 	{
-		return this->m_uiMaxSize;
+		return m_uiMaxSize;
 	}
 
 	/**
@@ -86,24 +84,7 @@ public:
 	 */
 	uint32_t InsertEntry(const TKey& key, const TValue& value)
 	{
-		ST_RANK_NODE stNode{ key, value };
-		uint32_t uiInsertPos = this->FindInsertPos(stNode);
-
-		// MaxSize 截断检查
-		if ((this->m_uiMaxSize > 0) && (uiInsertPos >= this->m_uiMaxSize))
-		{
-			return 0;
-		}
-
-		// 先截断末尾再插入，避免 size 短暂超过 MaxSize 触发扩容
-		if ((this->m_uiMaxSize > 0) && (this->GetCount() >= this->m_uiMaxSize))
-		{
-			this->m_vecRank.pop_back();
-		}
-
-		this->m_vecRank.insert(this->m_vecRank.begin() + uiInsertPos, stNode);
-
-		return uiInsertPos + 1;
+		return this->InsertNode(ST_RANK_NODE{ key, value });
 	}
 
 	/**
@@ -116,33 +97,13 @@ public:
 	uint32_t UpdateEntry(const TKey& key, const TValue& oldValue, const TValue& newValue)
 	{
 		// 二分定位旧条目并删除
-		ST_RANK_NODE stOldNode{ key, oldValue };
-		uint32_t uiOldIndex = this->FindByNode(stOldNode);
+		uint32_t uiOldIndex = this->FindByNode(ST_RANK_NODE{ key, oldValue });
 		if (uiOldIndex < this->GetCount())
 		{
-			this->m_vecRank.erase(this->m_vecRank.begin() + uiOldIndex);
+			m_vecRank.erase(m_vecRank.begin() + uiOldIndex);
 		}
 
-		// 构造新节点，二分查找插入位置
-		ST_RANK_NODE stNewNode{ key, newValue };
-		uint32_t uiInsertPos = this->FindInsertPos(stNewNode);
-
-		// MaxSize 截断检查
-		if ((this->m_uiMaxSize > 0) && (uiInsertPos >= this->m_uiMaxSize))
-		{
-			return 0;
-		}
-
-		// 先截断末尾再插入，避免 size 短暂超过 MaxSize 触发扩容
-		if ((this->m_uiMaxSize > 0) && (this->GetCount() >= this->m_uiMaxSize))
-		{
-			this->m_vecRank.pop_back();
-		}
-
-		// 插入新条目
-		this->m_vecRank.insert(this->m_vecRank.begin() + uiInsertPos, stNewNode);
-
-		return uiInsertPos + 1;
+		return this->InsertNode(ST_RANK_NODE{ key, newValue });
 	}
 
 	/**
@@ -160,28 +121,7 @@ public:
 			m_vecRank.erase(m_vecRank.begin() + uiOldIndex);
 		}
 
-		// 构造节点用于二分查找
-		ST_RANK_NODE stNode{ key, value };
-
-		// 二分查找插入位置
-		uint32_t uiInsertPos = this->FindInsertPos(stNode);
-
-		// MaxSize 截断检查
-		if ((m_uiMaxSize > 0) && (uiInsertPos >= m_uiMaxSize))
-		{
-			return 0;
-		}
-
-		// 先截断末尾再插入，避免 size 短暂超过 MaxSize 触发扩容
-		if ((this->m_uiMaxSize > 0) && (this->GetCount() >= this->m_uiMaxSize))
-		{
-			this->m_vecRank.pop_back();
-		}
-
-		// 插入新条目
-		this->m_vecRank.insert(this->m_vecRank.begin() + uiInsertPos, stNode);
-
-		return uiInsertPos + 1;
+		return this->InsertNode(ST_RANK_NODE{ key, value });
 	}
 
 	/**
@@ -210,8 +150,7 @@ public:
 	 */
 	bool RemoveEntry(const TKey& key, const TValue& value)
 	{
-		ST_RANK_NODE stNode{ key, value };
-		uint32_t uiIndex = this->FindByNode(stNode);
+		uint32_t uiIndex = this->FindByNode(ST_RANK_NODE{ key, value });
 		if (uiIndex >= this->GetCount())
 		{
 			return false;
@@ -239,14 +178,7 @@ public:
 	 */
 	uint32_t GetRank(const TKey& key, const TValue& value) const
 	{
-		ST_RANK_NODE stNode{ key, value };
-		uint32_t uiIndex = this->FindByNode(stNode);
-		if (uiIndex >= this->GetCount())
-		{
-			return 0;
-		}
-
-		return uiIndex + 1;
+		return this->IndexToRank(this->FindByNode(ST_RANK_NODE{ key, value }));
 	}
 
 	/**
@@ -257,13 +189,7 @@ public:
 	 */
 	uint32_t GetRank(const TKey& key) const
 	{
-		uint32_t uiIndex = this->FindByKey(key);
-		if (uiIndex >= this->GetCount())
-		{
-			return 0;
-		}
-
-		return uiIndex + 1;
+		return this->IndexToRank(this->FindByKey(key));
 	}
 
 	/**
@@ -280,7 +206,7 @@ public:
 			return false;
 		}
 
-		fn(uiRank, this->m_vecRank[uiRank - 1]);
+		fn(uiRank, m_vecRank[uiRank - 1]);
 		return true;
 	}
 
@@ -301,7 +227,7 @@ public:
 		uint32_t uiActual = std::min(uiCount, this->GetCount());
 		for (uint32_t ui = 0; ui < uiActual; ++ui)
 		{
-			fn(ui + 1, this->m_vecRank[ui]);
+			fn(ui + 1, m_vecRank[ui]);
 		}
 		return uiActual;
 	}
@@ -336,7 +262,7 @@ public:
 
 		for (uint32_t ui = uiStart; ui < uiEnd; ++ui)
 		{
-			fn(ui + 1, this->m_vecRank[ui]);
+			fn(ui + 1, m_vecRank[ui]);
 		}
 		return uiEnd - uiStart;
 	}
@@ -356,7 +282,7 @@ public:
 			return false;
 		}
 
-		fn(uiIndex + 1, this->m_vecRank[uiIndex]);
+		fn(uiIndex + 1, m_vecRank[uiIndex]);
 		return true;
 	}
 
@@ -370,6 +296,8 @@ public:
 	}
 
 private:
+	using VEC_RANK_NODE = std::vector<ST_RANK_NODE>;
+
 	/**
 	 * @brief 按 key 线性查找
 	 * @param [in] key 玩家唯一标识
@@ -393,9 +321,9 @@ private:
 	 */
 	bool CompareNodes(const ST_RANK_NODE& lhs, const ST_RANK_NODE& rhs) const
 	{
-		if (this->m_fnCompare(lhs.value, rhs.value))
+		if (m_fnCompare(lhs.value, rhs.value))
 			return true;
-		if (this->m_fnCompare(rhs.value, lhs.value))
+		if (m_fnCompare(rhs.value, lhs.value))
 			return false;
 		return lhs.key < rhs.key;
 	}
@@ -437,6 +365,47 @@ private:
 		}
 
 		return this->GetCount();
+	}
+
+	/**
+	 * @brief 将下标转换为排名（1-based）
+	 * @param [in] uiIndex 下标
+	 * @return 排名（1-based），未找到（uiIndex >= GetCount()）返回 0
+	 */
+	uint32_t IndexToRank(uint32_t uiIndex) const
+	{
+		if (uiIndex >= this->GetCount())
+		{
+			return 0;
+		}
+
+		return uiIndex + 1;
+	}
+
+	/**
+	 * @brief 二分查找插入位置并插入节点，处理 MaxSize 截断
+	 * @param [in] stNode 待插入的节点
+	 * @return 新排名（1-based），0 表示未上榜（被 MaxSize 截断）
+	 */
+	uint32_t InsertNode(const ST_RANK_NODE& stNode)
+	{
+		uint32_t uiInsertPos = this->FindInsertPos(stNode);
+
+		// MaxSize 截断检查
+		if ((m_uiMaxSize > 0) && (uiInsertPos >= m_uiMaxSize))
+		{
+			return 0;
+		}
+
+		// 先截断末尾再插入，避免 size 短暂超过 MaxSize 触发扩容
+		if ((m_uiMaxSize > 0) && (this->GetCount() >= m_uiMaxSize))
+		{
+			m_vecRank.pop_back();
+		}
+
+		m_vecRank.insert(m_vecRank.begin() + uiInsertPos, stNode);
+
+		return uiInsertPos + 1;
 	}
 
 	VEC_RANK_NODE m_vecRank;     // 有序数组（唯一数据源）
