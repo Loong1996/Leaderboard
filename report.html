@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TLeaderboard 测试报告</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, "Microsoft YaHei", "Segoe UI", sans-serif;
+  background: #f0f2f5; color: #333; padding: 20px;
+}
+.container { max-width: 1200px; margin: 0 auto; }
+h1 { text-align: center; color: #1a1a2e; margin-bottom: 8px; font-size: 28px; }
+.subtitle { text-align: center; color: #666; margin-bottom: 30px; font-size: 14px; }
+.card {
+  background: #fff; border-radius: 12px; padding: 24px;
+  margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+.card h2 {
+  font-size: 18px; color: #1a1a2e; margin-bottom: 16px;
+  padding-bottom: 8px; border-bottom: 2px solid #e8e8e8;
+}
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th {
+  background: #f7f8fa; color: #555; font-weight: 600;
+  padding: 10px 12px; text-align: left; border-bottom: 2px solid #e8e8e8;
+}
+td { padding: 10px 12px; border-bottom: 1px solid #f0f0f0; }
+tr:hover td { background: #f7f8fa; }
+.num { text-align: right; font-family: "Cascadia Code", "Consolas", monospace; }
+
+/* 汇总卡片 */
+.summary-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px; margin-bottom: 20px;
+}
+.summary-item {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 10px; padding: 16px; color: #fff;
+}
+.summary-item.green  { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
+.summary-item.orange { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+.summary-item.blue   { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
+.summary-item.teal   { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); }
+.summary-label { font-size: 12px; opacity: 0.9; }
+.summary-value { font-size: 24px; font-weight: 700; margin-top: 4px; }
+
+/* 测试结果 */
+.test-badge {
+  display: inline-block; padding: 2px 10px; border-radius: 10px;
+  font-size: 12px; font-weight: 600;
+}
+.test-badge.pass { background: #d4edda; color: #155724; }
+.test-badge.fail { background: #f8d7da; color: #721c24; }
+.test-category {
+  background: #e8e8e8; color: #555; padding: 4px 10px; border-radius: 6px;
+  font-size: 12px; font-weight: 600; display: inline-block; margin-bottom: 8px;
+}
+.test-detail { color: #dc3545; font-size: 12px; margin-top: 4px; }
+
+/* 性能条形图 */
+.bar-cell { width: 30%; }
+.bar-container {
+  background: #f0f0f0; border-radius: 4px; height: 22px;
+  position: relative; overflow: hidden;
+}
+.bar { height: 100%; border-radius: 4px; min-width: 2px; transition: width 0.6s ease; }
+.bar-label {
+  position: absolute; right: 6px; top: 2px;
+  font-size: 11px; color: #666; font-family: monospace;
+}
+
+/* Tab */
+.tab-bar { display: flex; gap: 4px; margin-bottom: 16px; flex-wrap: wrap; }
+.tab-btn {
+  padding: 8px 16px; border: none; background: #e8e8e8;
+  border-radius: 6px 6px 0 0; cursor: pointer; font-size: 14px;
+  color: #666; transition: all 0.2s;
+}
+.tab-btn.active { background: #fff; color: #1a1a2e; font-weight: 600; }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* 图例 */
+.legend { display: flex; gap: 20px; margin-bottom: 16px; flex-wrap: wrap; }
+.legend-item { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.legend-dot { width: 12px; height: 12px; border-radius: 3px; }
+
+/* 复杂度 */
+.complexity-tag {
+  display: inline-block; padding: 2px 8px; border-radius: 4px;
+  font-size: 12px; font-weight: 600;
+}
+.complexity-tag.logn { background: #d4edda; color: #155724; }
+.complexity-tag.n    { background: #fff3cd; color: #856404; }
+.complexity-tag.o1   { background: #cce5ff; color: #004085; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>TLeaderboard 测试报告</h1>
+  <p class="subtitle">基于有序 vector 实现的百万级实时排行榜 &mdash; 生成时间：Apr 14 2026 10:51:27</p>
+
+  <div class="summary-grid" id="summary"></div>
+
+  <!-- 单元测试 -->
+  <div class="card">
+    <h2>单元测试结果</h2>
+    <div id="testResults"></div>
+  </div>
+
+  <!-- 性能基准 -->
+  <div class="card">
+    <h2>性能基准测试 - 按数据规模</h2>
+    <div class="tab-bar" id="tabBar"></div>
+    <div id="tabPanels"></div>
+  </div>
+
+  <div class="card">
+    <h2>操作耗时对比（按操作类型分组）</h2>
+    <div id="byOperation"></div>
+  </div>
+
+  <div class="card">
+    <h2>复杂度说明</h2>
+    <table>
+      <thead><tr><th>操作</th><th>时间复杂度</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td>InsertEntry (新插入)</td><td><span class="complexity-tag n">O(log N + N)</span></td><td>二分定位插入位置 + 数组移动，跳过查重</td></tr>
+        <tr><td>UpdateEntry (无旧值)</td><td><span class="complexity-tag n">O(N)</span></td><td>线性查找旧条目 + 二分定位插入位置 + 数组移动</td></tr>
+        <tr><td>UpdateEntry (有旧值)</td><td><span class="complexity-tag n">O(log N + N)</span></td><td>二分定位旧条目 + 二分定位插入位置 + 数组移动</td></tr>
+        <tr><td>GetRank (key+value)</td><td><span class="complexity-tag logn">O(log N)</span></td><td>全序比较器二分精确定位</td></tr>
+        <tr><td>GetRank (仅 key)</td><td><span class="complexity-tag n">O(N)</span></td><td>线性扫描匹配 key</td></tr>
+        <tr><td>RemoveEntry (key+value)</td><td><span class="complexity-tag n">O(log N + N)</span></td><td>二分定位 O(log N) + 数组移动 O(N)</td></tr>
+        <tr><td>RemoveEntry (仅 key)</td><td><span class="complexity-tag n">O(N)</span></td><td>线性扫描 + 数组移动</td></tr>
+        <tr><td>GetTopN / GetAroundRank / GetEntryByRank</td><td><span class="complexity-tag o1">O(1)</span></td><td>直接指针偏移，零拷贝</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const TESTS = [
+  {"name":"插入与查询排名","category":"基本操作","passed":true,"detail":""},
+  {"name":"更新已有条目","category":"基本操作","passed":true,"detail":""},
+  {"name":"UpdateEntry 返回值","category":"基本操作","passed":true,"detail":""},
+  {"name":"按 key+value 删除","category":"基本操作","passed":true,"detail":""},
+  {"name":"按 key 删除","category":"基本操作","passed":true,"detail":""},
+  {"name":"清空排行榜","category":"基本操作","passed":true,"detail":""},
+  {"name":"按 key 查询排名","category":"基本操作","passed":true,"detail":""},
+  {"name":"删除后重新插入","category":"基本操作","passed":true,"detail":""},
+  {"name":"按排名获取节点","category":"查询操作","passed":true,"detail":""},
+  {"name":"获取 TopN","category":"查询操作","passed":true,"detail":""},
+  {"name":"获取排名附近玩家","category":"查询操作","passed":true,"detail":""},
+  {"name":"按 key 查找节点","category":"查询操作","passed":true,"detail":""},
+  {"name":"基本截断","category":"MaxSize 截断","passed":true,"detail":""},
+  {"name":"更新已有条目不截断","category":"MaxSize 截断","passed":true,"detail":""},
+  {"name":"动态 SetMaxSize","category":"MaxSize 截断","passed":true,"detail":""},
+  {"name":"MaxSize=1 极限场景","category":"MaxSize 截断","passed":true,"detail":""},
+  {"name":"Reserve 预分配","category":"MaxSize 截断","passed":true,"detail":""},
+  {"name":"同分按 key 决胜","category":"同分排序","passed":true,"detail":""},
+  {"name":"混合同分不同分","category":"同分排序","passed":true,"detail":""},
+  {"name":"多维排序","category":"自定义比较器","passed":true,"detail":""},
+  {"name":"多维排序增删","category":"自定义比较器","passed":true,"detail":""},
+  {"name":"空排行榜","category":"边界情况","passed":true,"detail":""},
+  {"name":"单条目","category":"边界情况","passed":true,"detail":""},
+  {"name":"字符串 key","category":"边界情况","passed":true,"detail":""},
+  {"name":"升序排行榜 (std::less)","category":"边界情况","passed":true,"detail":""},
+  {"name":"万级数据正确性","category":"边界情况","passed":true,"detail":""}
+];
+const BENCH = [
+  {"name":"UpdateEntry (插入新条目)","scale":1000,"ops":1000,"totalMs":0.349,"avgUs":0.349},
+  {"name":"InsertEntry (插入新条目)","scale":1000,"ops":1000,"totalMs":0.1446,"avgUs":0.1446},
+  {"name":"UpdateEntry (更新已有, 无旧值)","scale":1000,"ops":1000,"totalMs":0.6395,"avgUs":0.6395},
+  {"name":"UpdateEntry (更新已有, 有旧值)","scale":1000,"ops":1000,"totalMs":0.4806,"avgUs":0.4806},
+  {"name":"GetRank (key+value, O(logN))","scale":1000,"ops":1000,"totalMs":0.068,"avgUs":0.068},
+  {"name":"GetRank (仅 key, O(N))","scale":1000,"ops":1000,"totalMs":0.2855,"avgUs":0.2855},
+  {"name":"RemoveEntry (key+value, O(logN))","scale":1000,"ops":1000,"totalMs":0.174,"avgUs":0.174},
+  {"name":"RemoveEntry (仅 key, O(N))","scale":1000,"ops":1000,"totalMs":0.3417,"avgUs":0.3417},
+  {"name":"ForeachTopN(100)","scale":1000,"ops":100000,"totalMs":0.1718,"avgUs":0.001718},
+  {"name":"ForeachAroundRank(center, 20)","scale":1000,"ops":100000,"totalMs":0.2853,"avgUs":0.002853},
+  {"name":"ForeachEntryByRank","scale":1000,"ops":100000,"totalMs":0.9128,"avgUs":0.009128},
+  {"name":"UpdateEntry (插入新条目)","scale":10000,"ops":10000,"totalMs":35.5161,"avgUs":3.55161},
+  {"name":"InsertEntry (插入新条目)","scale":10000,"ops":10000,"totalMs":13.0772,"avgUs":1.30772},
+  {"name":"UpdateEntry (更新已有, 无旧值)","scale":10000,"ops":10000,"totalMs":81.2735,"avgUs":8.12735},
+  {"name":"UpdateEntry (更新已有, 有旧值)","scale":10000,"ops":10000,"totalMs":35.7165,"avgUs":3.57165},
+  {"name":"GetRank (key+value, O(logN))","scale":10000,"ops":10000,"totalMs":1.2713,"avgUs":0.12713},
+  {"name":"GetRank (仅 key, O(N))","scale":10000,"ops":10000,"totalMs":22.6874,"avgUs":2.26874},
+  {"name":"RemoveEntry (key+value, O(logN))","scale":10000,"ops":10000,"totalMs":6.6602,"avgUs":0.66602},
+  {"name":"RemoveEntry (仅 key, O(N))","scale":10000,"ops":10000,"totalMs":20.6418,"avgUs":2.06418},
+  {"name":"ForeachTopN(100)","scale":10000,"ops":100000,"totalMs":0.077,"avgUs":0.00077},
+  {"name":"ForeachAroundRank(center, 20)","scale":10000,"ops":100000,"totalMs":0.1505,"avgUs":0.001505},
+  {"name":"ForeachEntryByRank","scale":10000,"ops":100000,"totalMs":0.8544,"avgUs":0.008544},
+  {"name":"UpdateEntry (插入新条目)","scale":100000,"ops":100000,"totalMs":3851.03,"avgUs":38.5103},
+  {"name":"InsertEntry (插入新条目)","scale":100000,"ops":100000,"totalMs":1223.56,"avgUs":12.2356},
+  {"name":"UpdateEntry (更新已有, 无旧值)","scale":100000,"ops":100000,"totalMs":8249.75,"avgUs":82.4975},
+  {"name":"UpdateEntry (更新已有, 有旧值)","scale":100000,"ops":100000,"totalMs":6099.69,"avgUs":60.9969},
+  {"name":"GetRank (key+value, O(logN))","scale":100000,"ops":100000,"totalMs":21.5174,"avgUs":0.215174},
+  {"name":"GetRank (仅 key, O(N))","scale":100000,"ops":100000,"totalMs":2980.42,"avgUs":29.8042},
+  {"name":"RemoveEntry (key+value, O(logN))","scale":100000,"ops":100000,"totalMs":1060.03,"avgUs":10.6003},
+  {"name":"RemoveEntry (仅 key, O(N))","scale":100000,"ops":100000,"totalMs":2680.24,"avgUs":26.8024},
+  {"name":"ForeachTopN(100)","scale":100000,"ops":100000,"totalMs":0.1265,"avgUs":0.001265},
+  {"name":"ForeachAroundRank(center, 20)","scale":100000,"ops":100000,"totalMs":0.1795,"avgUs":0.001795},
+  {"name":"ForeachEntryByRank","scale":100000,"ops":100000,"totalMs":0.516,"avgUs":0.00516}
+];
+
+const COLORS = ['#667eea','#11998e','#f5576c','#4facfe','#fa709a','#fee140','#a18cd1','#fbc2eb'];
+
+// 汇总
+function renderSummary() {
+  const totalTests = TESTS.length;
+  const passedTests = TESTS.filter(t => t.passed).length;
+  const failedTests = totalTests - passedTests;
+  const scales = [...new Set(BENCH.map(d => d.scale))].sort((a,b) => a-b);
+  const maxScale = scales[scales.length - 1];
+  const maxData = BENCH.filter(d => d.scale === maxScale);
+  const insertData = maxData.find(d => d.name.includes('插入'));
+  const getRankLogN = maxData.find(d => d.name.includes('O(logN)') && d.name.includes('GetRank'));
+
+  document.getElementById('summary').innerHTML = `
+    <div class="summary-item ${failedTests === 0 ? 'green' : 'orange'}">
+      <div class="summary-label">单元测试</div>
+      <div class="summary-value">${passedTests}/${totalTests} 通过</div>
+    </div>
+    <div class="summary-item teal">
+      <div class="summary-label">最大测试规模</div>
+      <div class="summary-value">${maxScale >= 10000 ? (maxScale/10000) + ' 万' : maxScale}</div>
+    </div>
+    <div class="summary-item">
+      <div class="summary-label">插入 ${maxScale >= 10000 ? (maxScale/10000)+'万' : maxScale} 条耗时</div>
+      <div class="summary-value">${insertData ? insertData.totalMs.toFixed(0) : '-'} ms</div>
+    </div>
+    <div class="summary-item blue">
+      <div class="summary-label">GetRank(O(logN)) 平均耗时</div>
+      <div class="summary-value">${getRankLogN ? getRankLogN.avgUs.toFixed(3) : '-'} us</div>
+    </div>`;
+}
+
+// 单元测试
+function renderTests() {
+  const container = document.getElementById('testResults');
+  const categories = [...new Set(TESTS.map(t => t.category))];
+
+  let html = '';
+  categories.forEach(cat => {
+    const items = TESTS.filter(t => t.category === cat);
+    const allPassed = items.every(t => t.passed);
+    html += `<div style="margin-bottom:16px">
+      <span class="test-category">${cat}</span>
+      <span class="test-badge ${allPassed ? 'pass' : 'fail'}">${items.filter(t=>t.passed).length}/${items.length}</span>
+      <table style="margin-top:8px">
+        <thead><tr><th style="width:50%">测试用例</th><th style="width:15%">结果</th><th>详情</th></tr></thead>
+        <tbody>`;
+    items.forEach(t => {
+      html += `<tr>
+        <td>${t.name}</td>
+        <td><span class="test-badge ${t.passed ? 'pass' : 'fail'}">${t.passed ? '通过' : '失败'}</span></td>
+        <td>${t.detail ? '<span class="test-detail">' + t.detail + '</span>' : '<span style="color:#999">-</span>'}</td>
+      </tr>`;
+    });
+    html += '</tbody></table></div>';
+  });
+  container.innerHTML = html;
+}
+
+// 性能 tabs
+function renderTabs() {
+  const scales = [...new Set(BENCH.map(d => d.scale))].sort((a,b) => a-b);
+  const tabBar = document.getElementById('tabBar');
+  const panels = document.getElementById('tabPanels');
+
+  scales.forEach((scale, idx) => {
+    const btn = document.createElement('button');
+    btn.className = 'tab-btn' + (idx === 0 ? ' active' : '');
+    btn.textContent = scale >= 10000 ? (scale/10000) + ' 万' : scale.toLocaleString();
+    btn.onclick = () => {
+      document.querySelectorAll('.tab-btn').forEach((b,i) => b.className = 'tab-btn' + (i===idx?' active':''));
+      document.querySelectorAll('.tab-panel').forEach((p,i) => p.className = 'tab-panel' + (i===idx?' active':''));
+    };
+    tabBar.appendChild(btn);
+
+    const panel = document.createElement('div');
+    panel.className = 'tab-panel' + (idx === 0 ? ' active' : '');
+
+    const items = BENCH.filter(d => d.scale === scale);
+    const maxAvg = Math.max(...items.map(d => d.avgUs));
+
+    let rows = items.map((d, i) => {
+      const pct = (d.avgUs / maxAvg * 100).toFixed(1);
+      const color = COLORS[i % COLORS.length];
+      return `<tr>
+        <td>${d.name}</td>
+        <td class="num">${d.ops.toLocaleString()}</td>
+        <td class="num">${d.totalMs.toFixed(2)}</td>
+        <td class="num">${d.avgUs.toFixed(3)}</td>
+        <td class="bar-cell">
+          <div class="bar-container">
+            <div class="bar" style="width:${pct}%;background:${color}"></div>
+            <div class="bar-label">${d.avgUs.toFixed(1)} us</div>
+          </div>
+        </td>
+      </tr>`;
+    }).join('');
+
+    panel.innerHTML = `<table>
+      <thead><tr>
+        <th>操作名称</th><th class="num">执行次数</th>
+        <th class="num">总耗时 (ms)</th><th class="num">平均耗时 (us)</th>
+        <th>耗时分布</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+    panels.appendChild(panel);
+  });
+}
+
+// 按操作分组
+function renderByOperation() {
+  const container = document.getElementById('byOperation');
+  const opNames = [...new Set(BENCH.map(d => d.name))];
+  const scales = [...new Set(BENCH.map(d => d.scale))].sort((a,b) => a-b);
+
+  let html = '<div class="legend">';
+  scales.forEach((s, i) => {
+    const label = s >= 10000 ? (s/10000) + ' 万' : s.toLocaleString();
+    html += `<div class="legend-item"><div class="legend-dot" style="background:${COLORS[i]}"></div>${label}</div>`;
+  });
+  html += '</div>';
+
+  const globalMax = Math.max(...BENCH.map(d => d.avgUs));
+
+  opNames.forEach(name => {
+    const items = BENCH.filter(d => d.name === name).sort((a,b) => a.scale - b.scale);
+    html += `<div style="margin-bottom:16px"><strong>${name}</strong><div style="margin-top:6px">`;
+    items.forEach(d => {
+      const scaleIdx = scales.indexOf(d.scale);
+      const color = COLORS[scaleIdx % COLORS.length];
+      const pct = (d.avgUs / globalMax * 100).toFixed(1);
+      const label = d.scale >= 10000 ? (d.scale/10000) + '万' : d.scale.toLocaleString();
+      html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">
+        <span style="width:50px;font-size:12px;color:#888;text-align:right">${label}</span>
+        <div style="flex:1;height:18px;background:#f0f0f0;border-radius:3px;position:relative;overflow:hidden">
+          <div style="height:100%;width:${pct}%;background:${color};border-radius:3px;min-width:2px"></div>
+        </div>
+        <span style="width:80px;font-size:12px;font-family:monospace;color:#555">${d.avgUs.toFixed(3)} us</span>
+      </div>`;
+    });
+    html += '</div></div>';
+  });
+  container.innerHTML = html;
+}
+
+renderSummary();
+renderTests();
+renderTabs();
+renderByOperation();
+</script>
+</body>
+</html>
