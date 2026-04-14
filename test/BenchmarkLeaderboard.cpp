@@ -649,26 +649,28 @@ static void BenchUpdate(uint32_t uiScale)
 	// 旧版：无旧值，O(N) 线性扫描
 	{
 		auto objBoardCopy = objBoard;
-		auto vecValuesCopy = vecValues;
 		CStopWatch sw;
 		for (uint32_t ui = 0; ui < OPS; ++ui)
-		{
 			objBoardCopy.UpdateEntry(vecKeys[ui], vecNewValues[ui]);
-			vecValuesCopy[vecKeys[ui]] = vecNewValues[ui];
-		}
 		AddResult("UpdateEntry (更新已有, 无旧值)", uiScale, OPS, sw.ElapsedMs());
 	}
 
 	// 新版：有旧值，O(log N) 二分定位
+	// 预先模拟每次调用时的 oldValue，避免循环内做 vecValuesCopy 更新
 	{
-		auto objBoardCopy = objBoard;
-		auto vecValuesCopy = vecValues;
-		CStopWatch sw;
+		struct ST_OP { uint64_t key; int64_t oldValue; int64_t newValue; };
+		std::vector<ST_OP> vecOps(OPS);
+		auto vecValuesSim = vecValues;
 		for (uint32_t ui = 0; ui < OPS; ++ui)
 		{
-			objBoardCopy.UpdateEntry(vecKeys[ui], vecValuesCopy[vecKeys[ui]], vecNewValues[ui]);
-			vecValuesCopy[vecKeys[ui]] = vecNewValues[ui];
+			vecOps[ui] = { vecKeys[ui], vecValuesSim[vecKeys[ui]], vecNewValues[ui] };
+			vecValuesSim[vecKeys[ui]] = vecNewValues[ui];
 		}
+
+		auto objBoardCopy = objBoard;
+		CStopWatch sw;
+		for (uint32_t ui = 0; ui < OPS; ++ui)
+			objBoardCopy.UpdateEntry(vecOps[ui].key, vecOps[ui].oldValue, vecOps[ui].newValue);
 		AddResult("UpdateEntry (更新已有, 有旧值)", uiScale, OPS, sw.ElapsedMs());
 	}
 }
@@ -691,11 +693,14 @@ static void BenchGetRankWithValue(uint32_t uiScale)
 	const uint32_t OPS = std::min(uiScale, (uint32_t)100000);
 	std::uniform_int_distribution<uint64_t> distKey(1, uiScale);
 
+	std::vector<uint64_t> vecKeys(OPS);
+	for (uint32_t ui = 0; ui < OPS; ++ui)
+		vecKeys[ui] = distKey(rng);
+
 	CStopWatch sw;
 	for (uint32_t ui = 0; ui < OPS; ++ui)
 	{
-		uint64_t ulKey = distKey(rng);
-		volatile uint32_t r = objBoard.GetRank(ulKey, vecScores[ulKey - 1]);
+		volatile uint32_t r = objBoard.GetRank(vecKeys[ui], vecScores[vecKeys[ui] - 1]);
 		(void)r;
 	}
 	AddResult("GetRank (key+value, O(logN))", uiScale, OPS, sw.ElapsedMs());
@@ -715,10 +720,14 @@ static void BenchGetRankByKey(uint32_t uiScale)
 	const uint32_t OPS = std::min(uiScale, (uint32_t)100000);
 	std::uniform_int_distribution<uint64_t> distKey(1, uiScale);
 
+	std::vector<uint64_t> vecKeys(OPS);
+	for (uint32_t ui = 0; ui < OPS; ++ui)
+		vecKeys[ui] = distKey(rng);
+
 	CStopWatch sw;
 	for (uint32_t ui = 0; ui < OPS; ++ui)
 	{
-		volatile uint32_t r = objBoard.GetRank(distKey(rng));
+		volatile uint32_t r = objBoard.GetRank(vecKeys[ui]);
 		(void)r;
 	}
 	AddResult("GetRank (仅 key, O(N))", uiScale, OPS, sw.ElapsedMs());
