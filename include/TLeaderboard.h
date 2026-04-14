@@ -24,7 +24,6 @@ template <typename TKey, typename TValue, typename TCompare = std::greater<TValu
 class TLeaderboard
 {
 public:
-	// 排行榜节点
 	struct ST_RANK_NODE
 	{
 		TKey key;
@@ -96,13 +95,7 @@ public:
 	 */
 	uint32_t UpdateEntry(const TKey& key, const TValue& oldValue, const TValue& newValue)
 	{
-		// 二分定位旧条目并删除
-		uint32_t uiOldIndex = this->FindByNode(ST_RANK_NODE{ key, oldValue });
-		if (uiOldIndex < this->GetCount())
-		{
-			m_vecRank.erase(m_vecRank.begin() + uiOldIndex);
-		}
-
+		this->TryErase(this->FindByNode(ST_RANK_NODE{ key, oldValue }));
 		return this->InsertNode(ST_RANK_NODE{ key, newValue });
 	}
 
@@ -114,13 +107,7 @@ public:
 	 */
 	uint32_t UpdateEntry(const TKey& key, const TValue& value)
 	{
-		// 若已存在，先删除旧条目
-		uint32_t uiOldIndex = this->FindByKey(key);
-		if (uiOldIndex < this->GetCount())
-		{
-			m_vecRank.erase(m_vecRank.begin() + uiOldIndex);
-		}
-
+		this->TryErase(this->FindByKey(key));
 		return this->InsertNode(ST_RANK_NODE{ key, value });
 	}
 
@@ -132,14 +119,7 @@ public:
 	 */
 	bool RemoveEntry(const TKey& key)
 	{
-		uint32_t uiIndex = this->FindByKey(key);
-		if (uiIndex >= this->GetCount())
-		{
-			return false;
-		}
-
-		m_vecRank.erase(m_vecRank.begin() + uiIndex);
-		return true;
+		return this->TryErase(this->FindByKey(key));
 	}
 
 	/**
@@ -150,14 +130,7 @@ public:
 	 */
 	bool RemoveEntry(const TKey& key, const TValue& value)
 	{
-		uint32_t uiIndex = this->FindByNode(ST_RANK_NODE{ key, value });
-		if (uiIndex >= this->GetCount())
-		{
-			return false;
-		}
-
-		m_vecRank.erase(m_vecRank.begin() + uiIndex);
-		return true;
+		return this->TryErase(this->FindByNode(ST_RANK_NODE{ key, value }));
 	}
 
 	/**
@@ -219,7 +192,7 @@ public:
 	template <typename TFunc>
 	uint32_t ForeachTopN(uint32_t uiCount, TFunc fn) const
 	{
-		if ((uiCount == 0) || (this->GetCount() == 0))
+		if (uiCount == 0)
 		{
 			return 0;
 		}
@@ -297,6 +270,22 @@ public:
 
 private:
 	using VEC_RANK_NODE = std::vector<ST_RANK_NODE>;
+
+	/**
+	 * @brief 若下标有效则删除对应条目
+	 * @param [in] uiIndex 下标
+	 * @return 是否成功删除
+	 */
+	bool TryErase(uint32_t uiIndex)
+	{
+		if (uiIndex >= this->GetCount())
+		{
+			return false;
+		}
+
+		m_vecRank.erase(m_vecRank.begin() + uiIndex);
+		return true;
+	}
 
 	/**
 	 * @brief 按 key 线性查找
