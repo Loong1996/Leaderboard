@@ -5,7 +5,7 @@
  * @details
  *     百万级实时排行榜模板类。
  *     基于有序 vector 实现，支持自定义排序规则。
- *     查询操作 O(1)（ForeachTopN / ForeachAroundRank / ForeachEntryByRank），
+ *     查询操作 O(1)（ForeachEntryByRank），O(K)（ForeachTopN / ForeachAroundRank，K 为遍历数量），
  *     更新操作 O(N)（UpdateEntry / RemoveEntry），
  *     GetRank/RemoveEntry: O(log N + K)（传入 value 时二分定位，K 为相等区间大小）
  *     TKey:     玩家唯一标识类型（如 uint64_t，须支持 operator<）
@@ -208,7 +208,7 @@ public:
 	/**
 	 * @brief 遍历某排名附近的玩家
 	 * @param [in] uiRank 中心排名（1-based）
-	 * @param [in] uiCount 请求总数量（中心排名前后各取一半）
+	 * @param [in] uiCount 请求总数量（以中心排名为基准向前取 uiCount/2，向后补足；靠近边界时窗口整体平移）
 	 * @param [in] fn 回调函数 void(uint32_t uiRank, const ST_RANK_NODE& stNode)
 	 * @return 实际遍历数量
 	 */
@@ -311,9 +311,15 @@ private:
 	bool CompareNodes(const ST_RANK_NODE& lhs, const ST_RANK_NODE& rhs) const
 	{
 		if (m_fnCompare(lhs.value, rhs.value))
+		{
 			return true;
+		}
+
 		if (m_fnCompare(rhs.value, lhs.value))
+		{
 			return false;
+		}
+
 		return lhs.key < rhs.key;
 	}
 
