@@ -87,7 +87,7 @@ public:
 	}
 
 	/**
-	 * @brief 插入或更新排行榜条目（调用方持有旧值时使用，O(log N) 定位）
+	 * @brief 插入或更新排行榜条目（调用方持有旧值时使用，O(log N + K) 定位；oldValue 失配时退化为 O(N)）
 	 * @param [in] key 玩家唯一标识
 	 * @param [in] oldValue 旧排序数据（用于二分定位旧条目）
 	 * @param [in] newValue 新排序数据

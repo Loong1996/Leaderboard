@@ -276,6 +276,31 @@ TEST_CASE(TestMaxSizeUpdateExisting)
 	assert(objBoard.GetCount() == 3);
 }
 
+TEST_CASE(TestMaxSizeUpdateExistingWithStaleOldValue)
+{
+	TLeaderboard<uint64_t, int64_t> objBoard(3);
+
+	objBoard.UpdateEntry(1001, 800);
+	objBoard.UpdateEntry(1002, 500);
+	objBoard.UpdateEntry(1003, 300);
+	assert(objBoard.GetCount() == 3);
+
+	// 旧值失配，新值比当前值差：key 仍在榜内，排名降低
+	uint32_t uiRank = objBoard.UpdateEntry(1003, 999, 200);
+	assert(uiRank == 3);
+	assert(objBoard.GetRank(1003, 200) == 3);
+	assert(objBoard.GetRank(1003, 300) == 0);
+	assert(objBoard.GetCount() == 3);
+
+	// 旧值失配，新值超过其他条目：key 排名上升，末位被淘汰
+	uiRank = objBoard.UpdateEntry(1003, 999, 600);
+	assert(uiRank == 2);
+	assert(objBoard.GetRank(1001, 800) == 1);
+	assert(objBoard.GetRank(1003, 600) == 2);
+	assert(objBoard.GetRank(1002, 500) == 3);
+	assert(objBoard.GetCount() == 3);
+}
+
 TEST_CASE(TestSetMaxSize)
 {
 	TLeaderboard<uint64_t, int64_t> objBoard;
