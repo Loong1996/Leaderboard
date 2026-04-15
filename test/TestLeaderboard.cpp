@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cassert>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -53,6 +54,26 @@ TEST_CASE(TestUpdateExisting)
 	assert(objBoard.GetRank(1002, 800) == 2);
 	assert(objBoard.GetRank(1001, 500) == 3);
 	assert(objBoard.GetCount() == 3);
+}
+
+TEST_CASE(TestUpdateExistingWithStaleOldValue)
+{
+	TLeaderboard<uint64_t, int64_t> objBoard;
+
+	objBoard.UpdateEntry(1001, 500);
+	objBoard.UpdateEntry(1002, 800);
+	objBoard.UpdateEntry(1003, 300);
+
+	uint32_t uiRank = objBoard.UpdateEntry(1003, 999, 900);
+	assert(uiRank == 1);
+	assert(objBoard.GetRank(1003, 900) == 1);
+	assert(objBoard.GetRank(1003, 300) == 0);
+	assert(objBoard.GetRank(1002, 800) == 2);
+	assert(objBoard.GetCount() == 3);
+
+	assert(objBoard.RemoveEntry(1003) == true);
+	assert(objBoard.RemoveEntry(1003) == false);
+	assert(objBoard.GetCount() == 2);
 }
 
 TEST_CASE(TestRemoveEntryWithValue)
@@ -172,6 +193,18 @@ TEST_CASE(TestForeachEntries)
 
 	// 起始排名 0
 	assert(objBoard.ForeachEntries(0, 1, [](uint32_t, const auto&) {}) == 0);
+
+	// 超大请求数量不应发生 uint32_t 回绕
+	vecKeys.clear();
+	uiCount = objBoard.ForeachEntries(2, std::numeric_limits<uint32_t>::max(), [&vecKeys](uint32_t, const auto& stNode)
+	{
+		vecKeys.push_back(stNode.key);
+	});
+	assert(uiCount == 3);
+	assert(vecKeys.size() == 3);
+	assert(vecKeys[0] == 1004);
+	assert(vecKeys[1] == 1001);
+	assert(vecKeys[2] == 1003);
 }
 
 TEST_CASE(TestGetEntry)

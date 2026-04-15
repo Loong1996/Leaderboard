@@ -8,10 +8,10 @@
  *     查询操作 O(1)（ForeachEntryByRank），O(K)（ForeachEntries，K 为请求数量），
  *     更新操作 O(N)（UpdateEntry / RemoveEntry），
  *     GetRank/RemoveEntry: O(log N + K)（传入 value 时二分定位，K 为相等区间大小）
- *     TKey:     玩家唯一标识类型（如 uint64_t，须支持 operator<）
+ *     TKey:     玩家唯一标识类型（如 uint64_t，须支持 operator< / operator==）
  *     TValue:   排序数据类型（POD 结构体、基础类型或指针均可）
  *     TCompare: 比较仿函数，默认 std::greater<TValue>（仅比较 value），
- *               若需含 key 的全序比较，自定义 TKeyCompare
+ *               value 相等时内部固定用 key 作为决胜条件
  */
 #pragma once
 
@@ -95,7 +95,14 @@ public:
 	 */
 	uint32_t UpdateEntry(const TKey& key, const TValue& oldValue, const TValue& newValue)
 	{
-		this->TryErase(this->FindByNode(ST_RANK_NODE{ key, oldValue }));
+		uint32_t uiIndex = this->FindByNode(ST_RANK_NODE{ key, oldValue });
+		if (uiIndex >= this->GetCount())
+		{
+			// oldValue 失配时退化到按 key 查找，避免插入重复 key。
+			uiIndex = this->FindByKey(key);
+		}
+
+		this->TryErase(uiIndex);
 		return this->InsertNode(ST_RANK_NODE{ key, newValue });
 	}
 
@@ -199,12 +206,14 @@ public:
 		}
 
 		uint32_t uiStart = uiStartRank - 1;
-		uint32_t uiEnd = std::min(uiStart + uiCount, this->GetCount());
+		uint32_t uiRemain = this->GetCount() - uiStart;
+		uint32_t uiActualCount = std::min(uiCount, uiRemain);
+		uint32_t uiEnd = uiStart + uiActualCount;
 		for (uint32_t ui = uiStart; ui < uiEnd; ++ui)
 		{
 			fn(ui + 1, m_vecRank[ui]);
 		}
-		return uiEnd - uiStart;
+		return uiActualCount;
 	}
 
 	/**
