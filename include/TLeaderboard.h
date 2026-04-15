@@ -299,18 +299,24 @@ private:
 	}
 
 	/**
-	 * @brief 二分查找插入位置
-	 * @param [in] stNode 待插入的节点
-	 * @return 插入位置下标
+	 * @brief 返回节点全序比较仿函数（供 std::upper_bound / std::lower_bound 使用）
 	 */
-	uint32_t FindInsertPos(const ST_RANK_NODE& stNode) const
+	auto NodeComp() const
+	{
+		return [this](const ST_RANK_NODE& lhs, const ST_RANK_NODE& rhs)
+		{
+			return this->CompareNodes(lhs, rhs);
+		};
+	}
+
+	/**
+	 * @brief 在 [uiBegin, uiEnd) 区间内执行 upper_bound，返回绝对下标
+	 */
+	uint32_t UpperBoundPos(uint32_t uiBegin, uint32_t uiEnd, const ST_RANK_NODE& stNode) const
 	{
 		auto it = std::upper_bound(
-			m_vecRank.begin(), m_vecRank.end(), stNode,
-			[this](const ST_RANK_NODE& lhs, const ST_RANK_NODE& rhs)
-			{
-				return this->CompareNodes(lhs, rhs);
-			});
+			m_vecRank.begin() + uiBegin, m_vecRank.begin() + uiEnd, stNode,
+			this->NodeComp());
 
 		return static_cast<uint32_t>(it - m_vecRank.begin());
 	}
@@ -324,10 +330,7 @@ private:
 	{
 		auto it = std::lower_bound(
 			m_vecRank.begin(), m_vecRank.end(), stNode,
-			[this](const ST_RANK_NODE& lhs, const ST_RANK_NODE& rhs)
-			{
-				return this->CompareNodes(lhs, rhs);
-			});
+			this->NodeComp());
 
 		if (it != m_vecRank.end() && !this->CompareNodes(*it, stNode) && !this->CompareNodes(stNode, *it))
 		{
@@ -354,61 +357,28 @@ private:
 	}
 
 	/**
-	 * @brief 在旧位置之前的有序区间内查找更新后的目标位置
-	 */
-	uint32_t FindUpdatedPosForward(uint32_t uiIndex, const ST_RANK_NODE& stNode) const
-	{
-		auto it = std::upper_bound(
-			m_vecRank.begin(), m_vecRank.begin() + uiIndex, stNode,
-			[this](const ST_RANK_NODE& lhs, const ST_RANK_NODE& rhs)
-			{
-				return this->CompareNodes(lhs, rhs);
-			});
-
-		return static_cast<uint32_t>(it - m_vecRank.begin());
-	}
-
-	/**
-	 * @brief 在旧位置之后的有序区间内查找更新后的目标位置
-	 */
-	uint32_t FindUpdatedPosBackward(uint32_t uiIndex, const ST_RANK_NODE& stNode) const
-	{
-		auto it = std::upper_bound(
-			m_vecRank.begin() + uiIndex + 1, m_vecRank.end(), stNode,
-			[this](const ST_RANK_NODE& lhs, const ST_RANK_NODE& rhs)
-			{
-				return this->CompareNodes(lhs, rhs);
-			});
-
-		return static_cast<uint32_t>((it - m_vecRank.begin()) - 1);
-	}
-
-	/**
 	 * @brief 对已存在条目执行原地更新或单次块移动更新
 	 */
 	uint32_t UpdateExistingNode(uint32_t uiIndex, const ST_RANK_NODE& stNode)
 	{
-		bool bForward = this->ShouldMoveForward(uiIndex, stNode);
-		bool bBackward = this->ShouldMoveBackward(uiIndex, stNode);
-
-		if (!bForward && !bBackward)
+		if (this->ShouldMoveForward(uiIndex, stNode))
 		{
-			m_vecRank[uiIndex] = stNode;
-			return uiIndex + 1;
-		}
-
-		if (bForward)
-		{
-			uint32_t uiTarget = this->FindUpdatedPosForward(uiIndex, stNode);
+			uint32_t uiTarget = this->UpperBoundPos(0, uiIndex, stNode);
 			std::move_backward(m_vecRank.begin() + uiTarget, m_vecRank.begin() + uiIndex, m_vecRank.begin() + uiIndex + 1);
 			m_vecRank[uiTarget] = stNode;
 			return uiTarget + 1;
 		}
 
-		uint32_t uiTarget = this->FindUpdatedPosBackward(uiIndex, stNode);
-		std::move(m_vecRank.begin() + uiIndex + 1, m_vecRank.begin() + uiTarget + 1, m_vecRank.begin() + uiIndex);
-		m_vecRank[uiTarget] = stNode;
-		return uiTarget + 1;
+		if (this->ShouldMoveBackward(uiIndex, stNode))
+		{
+			uint32_t uiTarget = this->UpperBoundPos(uiIndex + 1, this->GetCount(), stNode) - 1;
+			std::move(m_vecRank.begin() + uiIndex + 1, m_vecRank.begin() + uiTarget + 1, m_vecRank.begin() + uiIndex);
+			m_vecRank[uiTarget] = stNode;
+			return uiTarget + 1;
+		}
+
+		m_vecRank[uiIndex] = stNode;
+		return uiIndex + 1;
 	}
 
 	/**
@@ -433,7 +403,7 @@ private:
 	 */
 	uint32_t InsertNode(const ST_RANK_NODE& stNode)
 	{
-		uint32_t uiInsertPos = this->FindInsertPos(stNode);
+		uint32_t uiInsertPos = this->UpperBoundPos(0, this->GetCount(), stNode);
 
 		// MaxSize 截断检查
 		if ((m_uiMaxSize > 0) && (uiInsertPos >= m_uiMaxSize))
