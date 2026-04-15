@@ -149,6 +149,136 @@ static void Test_ReturnValue()
 	CHECK(objBoard.UpdateEntry(1003, 100) == 4);
 }
 
+struct ST_COUNTED_VALUE
+{
+	int64_t iScore;
+
+	static uint32_t s_uiCopyCtorCount;
+	static uint32_t s_uiMoveCtorCount;
+	static uint32_t s_uiCopyAssignCount;
+	static uint32_t s_uiMoveAssignCount;
+
+	ST_COUNTED_VALUE(int64_t iInScore = 0)
+		: iScore(iInScore)
+	{
+	}
+
+	ST_COUNTED_VALUE(const ST_COUNTED_VALUE& stOther)
+		: iScore(stOther.iScore)
+	{
+		++s_uiCopyCtorCount;
+	}
+
+	ST_COUNTED_VALUE(ST_COUNTED_VALUE&& stOther) noexcept
+		: iScore(stOther.iScore)
+	{
+		++s_uiMoveCtorCount;
+	}
+
+	ST_COUNTED_VALUE& operator=(const ST_COUNTED_VALUE& stOther)
+	{
+		iScore = stOther.iScore;
+		++s_uiCopyAssignCount;
+		return *this;
+	}
+
+	ST_COUNTED_VALUE& operator=(ST_COUNTED_VALUE&& stOther) noexcept
+	{
+		iScore = stOther.iScore;
+		++s_uiMoveAssignCount;
+		return *this;
+	}
+
+	static void ResetCounters()
+	{
+		s_uiCopyCtorCount = 0;
+		s_uiMoveCtorCount = 0;
+		s_uiCopyAssignCount = 0;
+		s_uiMoveAssignCount = 0;
+	}
+
+	static uint32_t GetMutationCount()
+	{
+		return s_uiCopyCtorCount + s_uiMoveCtorCount + s_uiCopyAssignCount + s_uiMoveAssignCount;
+	}
+};
+
+uint32_t ST_COUNTED_VALUE::s_uiCopyCtorCount = 0;
+uint32_t ST_COUNTED_VALUE::s_uiMoveCtorCount = 0;
+uint32_t ST_COUNTED_VALUE::s_uiCopyAssignCount = 0;
+uint32_t ST_COUNTED_VALUE::s_uiMoveAssignCount = 0;
+
+struct ST_COUNTED_VALUE_COMPARE
+{
+	bool operator()(const ST_COUNTED_VALUE& lhs, const ST_COUNTED_VALUE& rhs) const
+	{
+		return lhs.iScore > rhs.iScore;
+	}
+};
+
+static void Test_UpdateSameRankUsesSingleWritePath()
+{
+	TLeaderboard<uint64_t, ST_COUNTED_VALUE, ST_COUNTED_VALUE_COMPARE> objBoard;
+	objBoard.Reserve(8);
+
+	objBoard.UpdateEntry(1, {100});
+	objBoard.UpdateEntry(2, {90});
+	objBoard.UpdateEntry(3, {80});
+	objBoard.UpdateEntry(4, {70});
+	objBoard.UpdateEntry(5, {60});
+
+	ST_COUNTED_VALUE::ResetCounters();
+
+	uint32_t uiRank = objBoard.UpdateEntry(3, {75});
+	uint32_t uiMutationCount = ST_COUNTED_VALUE::GetMutationCount();
+	CHECK(uiRank == 3);
+	CHECK(objBoard.GetRank(3, {75}) == 3);
+	CHECK(objBoard.GetRank(4, {70}) == 4);
+	CHECK(uiMutationCount <= 2);
+}
+
+static void Test_UpdateMoveForwardUsesSingleBlockMove()
+{
+	TLeaderboard<uint64_t, ST_COUNTED_VALUE, ST_COUNTED_VALUE_COMPARE> objBoard;
+	objBoard.Reserve(8);
+
+	objBoard.UpdateEntry(1, {100});
+	objBoard.UpdateEntry(2, {90});
+	objBoard.UpdateEntry(3, {80});
+	objBoard.UpdateEntry(4, {70});
+	objBoard.UpdateEntry(5, {60});
+
+	ST_COUNTED_VALUE::ResetCounters();
+
+	uint32_t uiRank = objBoard.UpdateEntry(4, {70}, {85});
+	uint32_t uiMutationCount = ST_COUNTED_VALUE::GetMutationCount();
+	CHECK(uiRank == 3);
+	CHECK(objBoard.GetRank(4, {85}) == 3);
+	CHECK(objBoard.GetRank(3, {80}) == 4);
+	CHECK(uiMutationCount <= 4);
+}
+
+static void Test_UpdateMoveBackwardUsesSingleBlockMove()
+{
+	TLeaderboard<uint64_t, ST_COUNTED_VALUE, ST_COUNTED_VALUE_COMPARE> objBoard;
+	objBoard.Reserve(8);
+
+	objBoard.UpdateEntry(1, {100});
+	objBoard.UpdateEntry(2, {90});
+	objBoard.UpdateEntry(3, {80});
+	objBoard.UpdateEntry(4, {70});
+	objBoard.UpdateEntry(5, {60});
+
+	ST_COUNTED_VALUE::ResetCounters();
+
+	uint32_t uiRank = objBoard.UpdateEntry(3, {65});
+	uint32_t uiMutationCount = ST_COUNTED_VALUE::GetMutationCount();
+	CHECK(uiRank == 4);
+	CHECK(objBoard.GetRank(4, {70}) == 3);
+	CHECK(objBoard.GetRank(3, {65}) == 4);
+	CHECK(uiMutationCount <= 3);
+}
+
 static void Test_RemoveWithValue()
 {
 	TLeaderboard<uint64_t, int64_t> objBoard;
@@ -508,6 +638,9 @@ static void RunUnitTests()
 	RUN_TEST("基本操作", "插入与查询排名",       Test_InsertAndGetRank);
 	RUN_TEST("基本操作", "更新已有条目",          Test_UpdateExisting);
 	RUN_TEST("基本操作", "UpdateEntry 返回值",    Test_ReturnValue);
+	RUN_TEST("基本操作", "UpdateEntry 排名不变",  Test_UpdateSameRankUsesSingleWritePath);
+	RUN_TEST("基本操作", "UpdateEntry 向前移动",  Test_UpdateMoveForwardUsesSingleBlockMove);
+	RUN_TEST("基本操作", "UpdateEntry 向后移动",  Test_UpdateMoveBackwardUsesSingleBlockMove);
 	RUN_TEST("基本操作", "按 key+value 删除",     Test_RemoveWithValue);
 	RUN_TEST("基本操作", "按 key 删除",           Test_RemoveByKey);
 	RUN_TEST("基本操作", "清空排行榜",            Test_Clear);
@@ -583,6 +716,108 @@ static void AddResult(const char* pszName, uint32_t uiScale, uint32_t uiOps,
 // ============================================================
 //  基准测试
 // ============================================================
+struct ST_UPDATE_OP
+{
+	uint64_t key;
+	int64_t oldValue;
+	int64_t newValue;
+};
+
+static TLeaderboard<uint64_t, int64_t> BuildSpacedBoard(uint32_t uiScale, std::vector<int64_t>& vecValues)
+{
+	TLeaderboard<uint64_t, int64_t> objBoard;
+	objBoard.Reserve(uiScale);
+
+	vecValues.assign(uiScale + 1, 0);
+	for (uint32_t ui = 0; ui < uiScale; ++ui)
+	{
+		uint64_t key = ui + 1;
+		int64_t iValue = static_cast<int64_t>(uiScale - ui) * 100;
+		vecValues[key] = iValue;
+		objBoard.InsertEntry(key, iValue);
+	}
+
+	return objBoard;
+}
+
+static uint32_t GetTargetedUpdateOps(uint32_t uiScale)
+{
+	return std::max(1u, std::min(uiScale / 4, (uint32_t)20000));
+}
+
+static std::vector<ST_UPDATE_OP> BuildSameRankUpdateOps(const std::vector<int64_t>& vecValues, uint32_t uiScale)
+{
+	std::vector<ST_UPDATE_OP> vecOps;
+	vecOps.reserve(GetTargetedUpdateOps(uiScale));
+
+	for (uint32_t key = 3; (key < uiScale) && (vecOps.size() < vecOps.capacity()); key += 4)
+	{
+		vecOps.push_back({ key, vecValues[key], vecValues[key] + 10 });
+	}
+
+	return vecOps;
+}
+
+static std::vector<ST_UPDATE_OP> BuildForwardUpdateOps(const std::vector<int64_t>& vecValues, uint32_t uiScale)
+{
+	std::vector<ST_UPDATE_OP> vecOps;
+	vecOps.reserve(GetTargetedUpdateOps(uiScale));
+
+	for (uint32_t key = 3; (key <= uiScale) && (vecOps.size() < vecOps.capacity()); key += 4)
+	{
+		vecOps.push_back({ key, vecValues[key], vecValues[key] + 150 });
+	}
+
+	return vecOps;
+}
+
+static std::vector<ST_UPDATE_OP> BuildBackwardUpdateOps(const std::vector<int64_t>& vecValues, uint32_t uiScale)
+{
+	std::vector<ST_UPDATE_OP> vecOps;
+	vecOps.reserve(GetTargetedUpdateOps(uiScale));
+
+	for (uint32_t key = 2; (key < uiScale) && (vecOps.size() < vecOps.capacity()); key += 4)
+	{
+		vecOps.push_back({ key, vecValues[key], vecValues[key] - 150 });
+	}
+
+	return vecOps;
+}
+
+static void BenchUpdateScenario(
+	const char* pszNoOldName,
+	const char* pszWithOldName,
+	uint32_t uiScale,
+	const TLeaderboard<uint64_t, int64_t>& objBoard,
+	const std::vector<ST_UPDATE_OP>& vecOps)
+{
+	const uint32_t uiOps = static_cast<uint32_t>(vecOps.size());
+	if (uiOps == 0)
+	{
+		return;
+	}
+
+	{
+		auto objBoardCopy = objBoard;
+		CStopWatch sw;
+		for (const auto& stOp : vecOps)
+		{
+			objBoardCopy.UpdateEntry(stOp.key, stOp.newValue);
+		}
+		AddResult(pszNoOldName, uiScale, uiOps, sw.ElapsedMs());
+	}
+
+	{
+		auto objBoardCopy = objBoard;
+		CStopWatch sw;
+		for (const auto& stOp : vecOps)
+		{
+			objBoardCopy.UpdateEntry(stOp.key, stOp.oldValue, stOp.newValue);
+		}
+		AddResult(pszWithOldName, uiScale, uiOps, sw.ElapsedMs());
+	}
+}
+
 static void BenchInsert(uint32_t uiScale)
 {
 	TLeaderboard<uint64_t, int64_t> objBoard;
@@ -658,8 +893,7 @@ static void BenchUpdate(uint32_t uiScale)
 	// 新版：有旧值，旧条目 O(log N) 精确定位，整体仍为 O(N)
 	// 预先模拟每次调用时的 oldValue，避免循环内做 vecValuesCopy 更新
 	{
-		struct ST_OP { uint64_t key; int64_t oldValue; int64_t newValue; };
-		std::vector<ST_OP> vecOps(OPS);
+		std::vector<ST_UPDATE_OP> vecOps(OPS);
 		auto vecValuesSim = vecValues;
 		for (uint32_t ui = 0; ui < OPS; ++ui)
 		{
@@ -673,6 +907,30 @@ static void BenchUpdate(uint32_t uiScale)
 			objBoardCopy.UpdateEntry(vecOps[ui].key, vecOps[ui].oldValue, vecOps[ui].newValue);
 		AddResult("UpdateEntry (更新已有, 有旧值)", uiScale, OPS, sw.ElapsedMs());
 	}
+
+	std::vector<int64_t> vecSpacedValues;
+	auto objSpacedBoard = BuildSpacedBoard(uiScale, vecSpacedValues);
+
+	BenchUpdateScenario(
+		"UpdateEntry (排名不变, 无旧值)",
+		"UpdateEntry (排名不变, 有旧值)",
+		uiScale,
+		objSpacedBoard,
+		BuildSameRankUpdateOps(vecSpacedValues, uiScale));
+
+	BenchUpdateScenario(
+		"UpdateEntry (向前移动, 无旧值)",
+		"UpdateEntry (向前移动, 有旧值)",
+		uiScale,
+		objSpacedBoard,
+		BuildForwardUpdateOps(vecSpacedValues, uiScale));
+
+	BenchUpdateScenario(
+		"UpdateEntry (向后移动, 无旧值)",
+		"UpdateEntry (向后移动, 有旧值)",
+		uiScale,
+		objSpacedBoard,
+		BuildBackwardUpdateOps(vecSpacedValues, uiScale));
 }
 
 static void BenchGetRankWithValue(uint32_t uiScale)
@@ -1059,8 +1317,8 @@ tr:hover td { background: #f7f8fa; }
       <thead><tr><th>操作</th><th>时间复杂度</th><th>说明</th></tr></thead>
       <tbody>
         <tr><td>InsertEntry (新插入)</td><td><span class="complexity-tag n">O(N)</span></td><td>二分定位插入位置 O(log N) + 数组移动 O(N)，跳过查重</td></tr>
-        <tr><td>UpdateEntry (无旧值)</td><td><span class="complexity-tag n">O(N)</span></td><td>线性查找旧条目 + 二分定位插入位置 + 数组移动</td></tr>
-        <tr><td>UpdateEntry (有旧值)</td><td><span class="complexity-tag n">O(N)</span></td><td>oldValue 命中时二分定位旧条目 O(log N)，插入/删除仍需数组移动 O(N)</td></tr>
+        <tr><td>UpdateEntry (无旧值)</td><td><span class="complexity-tag n">O(N)</span></td><td>线性查找旧条目；排名不变时原地覆盖，前后移动时单次块移动</td></tr>
+        <tr><td>UpdateEntry (有旧值)</td><td><span class="complexity-tag n">O(N)</span></td><td>oldValue 命中时旧条目定位 O(log N)；排名不变时原地覆盖，前后移动时单次块移动</td></tr>
         <tr><td>GetRank (key+value)</td><td><span class="complexity-tag logn">O(log N)</span></td><td>全序比较器二分精确定位</td></tr>
         <tr><td>GetRank (仅 key)</td><td><span class="complexity-tag n">O(N)</span></td><td>线性扫描匹配 key</td></tr>
         <tr><td>RemoveEntry (key+value)</td><td><span class="complexity-tag n">O(N)</span></td><td>二分定位 O(log N) + 数组移动 O(N)</td></tr>

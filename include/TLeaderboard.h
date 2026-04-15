@@ -102,8 +102,7 @@ public:
 			uiIndex = this->FindByKey(key);
 		}
 
-		this->TryErase(uiIndex);
-		return this->InsertNode(ST_RANK_NODE{ key, newValue });
+		return this->UpdateOrInsertNode(uiIndex, ST_RANK_NODE{ key, newValue });
 	}
 
 	/**
@@ -114,8 +113,7 @@ public:
 	 */
 	uint32_t UpdateEntry(const TKey& key, const TValue& value)
 	{
-		this->TryErase(this->FindByKey(key));
-		return this->InsertNode(ST_RANK_NODE{ key, value });
+		return this->UpdateOrInsertNode(this->FindByKey(key), ST_RANK_NODE{ key, value });
 	}
 
 	/**
@@ -340,6 +338,80 @@ private:
 	}
 
 	/**
+	 * @brief 判断节点更新后是否需要向前移动
+	 */
+	bool ShouldMoveForward(uint32_t uiIndex, const ST_RANK_NODE& stNode) const
+	{
+		return (uiIndex > 0) && this->CompareNodes(stNode, m_vecRank[uiIndex - 1]);
+	}
+
+	/**
+	 * @brief 判断节点更新后是否需要向后移动
+	 */
+	bool ShouldMoveBackward(uint32_t uiIndex, const ST_RANK_NODE& stNode) const
+	{
+		return (uiIndex + 1 < this->GetCount()) && this->CompareNodes(m_vecRank[uiIndex + 1], stNode);
+	}
+
+	/**
+	 * @brief 在旧位置之前的有序区间内查找更新后的目标位置
+	 */
+	uint32_t FindUpdatedPosForward(uint32_t uiIndex, const ST_RANK_NODE& stNode) const
+	{
+		auto it = std::upper_bound(
+			m_vecRank.begin(), m_vecRank.begin() + uiIndex, stNode,
+			[this](const ST_RANK_NODE& lhs, const ST_RANK_NODE& rhs)
+			{
+				return this->CompareNodes(lhs, rhs);
+			});
+
+		return static_cast<uint32_t>(it - m_vecRank.begin());
+	}
+
+	/**
+	 * @brief 在旧位置之后的有序区间内查找更新后的目标位置
+	 */
+	uint32_t FindUpdatedPosBackward(uint32_t uiIndex, const ST_RANK_NODE& stNode) const
+	{
+		auto it = std::upper_bound(
+			m_vecRank.begin() + uiIndex + 1, m_vecRank.end(), stNode,
+			[this](const ST_RANK_NODE& lhs, const ST_RANK_NODE& rhs)
+			{
+				return this->CompareNodes(lhs, rhs);
+			});
+
+		return static_cast<uint32_t>((it - m_vecRank.begin()) - 1);
+	}
+
+	/**
+	 * @brief 对已存在条目执行原地更新或单次块移动更新
+	 */
+	uint32_t UpdateExistingNode(uint32_t uiIndex, const ST_RANK_NODE& stNode)
+	{
+		bool bForward = this->ShouldMoveForward(uiIndex, stNode);
+		bool bBackward = this->ShouldMoveBackward(uiIndex, stNode);
+
+		if (!bForward && !bBackward)
+		{
+			m_vecRank[uiIndex] = stNode;
+			return uiIndex + 1;
+		}
+
+		if (bForward)
+		{
+			uint32_t uiTarget = this->FindUpdatedPosForward(uiIndex, stNode);
+			std::move_backward(m_vecRank.begin() + uiTarget, m_vecRank.begin() + uiIndex, m_vecRank.begin() + uiIndex + 1);
+			m_vecRank[uiTarget] = stNode;
+			return uiTarget + 1;
+		}
+
+		uint32_t uiTarget = this->FindUpdatedPosBackward(uiIndex, stNode);
+		std::move(m_vecRank.begin() + uiIndex + 1, m_vecRank.begin() + uiTarget + 1, m_vecRank.begin() + uiIndex);
+		m_vecRank[uiTarget] = stNode;
+		return uiTarget + 1;
+	}
+
+	/**
 	 * @brief 将下标转换为排名（1-based）
 	 * @param [in] uiIndex 下标
 	 * @return 排名（1-based），未找到（uiIndex >= GetCount()）返回 0
@@ -378,6 +450,19 @@ private:
 		m_vecRank.insert(m_vecRank.begin() + uiInsertPos, stNode);
 
 		return uiInsertPos + 1;
+	}
+
+	/**
+	 * @brief 已存在条目时走单次块移动更新，否则走常规插入路径
+	 */
+	uint32_t UpdateOrInsertNode(uint32_t uiIndex, const ST_RANK_NODE& stNode)
+	{
+		if (uiIndex >= this->GetCount())
+		{
+			return this->InsertNode(stNode);
+		}
+
+		return this->UpdateExistingNode(uiIndex, stNode);
 	}
 
 	VEC_RANK_NODE m_vecRank;     // 有序数组（唯一数据源）

@@ -398,6 +398,140 @@ TEST_CASE(TestUpdateEntryReturnValue)
 }
 
 // ============================================================
+//  UpdateEntry 单次块移动优化测试
+// ============================================================
+
+struct ST_COUNTED_VALUE
+{
+	int64_t iScore;
+
+	static uint32_t s_uiCopyCtorCount;
+	static uint32_t s_uiMoveCtorCount;
+	static uint32_t s_uiCopyAssignCount;
+	static uint32_t s_uiMoveAssignCount;
+
+	ST_COUNTED_VALUE(int64_t iInScore = 0)
+		: iScore(iInScore)
+	{
+	}
+
+	ST_COUNTED_VALUE(const ST_COUNTED_VALUE& stOther)
+		: iScore(stOther.iScore)
+	{
+		++s_uiCopyCtorCount;
+	}
+
+	ST_COUNTED_VALUE(ST_COUNTED_VALUE&& stOther) noexcept
+		: iScore(stOther.iScore)
+	{
+		++s_uiMoveCtorCount;
+	}
+
+	ST_COUNTED_VALUE& operator=(const ST_COUNTED_VALUE& stOther)
+	{
+		iScore = stOther.iScore;
+		++s_uiCopyAssignCount;
+		return *this;
+	}
+
+	ST_COUNTED_VALUE& operator=(ST_COUNTED_VALUE&& stOther) noexcept
+	{
+		iScore = stOther.iScore;
+		++s_uiMoveAssignCount;
+		return *this;
+	}
+
+	static void ResetCounters()
+	{
+		s_uiCopyCtorCount = 0;
+		s_uiMoveCtorCount = 0;
+		s_uiCopyAssignCount = 0;
+		s_uiMoveAssignCount = 0;
+	}
+
+	static uint32_t GetMutationCount()
+	{
+		return s_uiCopyCtorCount + s_uiMoveCtorCount + s_uiCopyAssignCount + s_uiMoveAssignCount;
+	}
+};
+
+uint32_t ST_COUNTED_VALUE::s_uiCopyCtorCount = 0;
+uint32_t ST_COUNTED_VALUE::s_uiMoveCtorCount = 0;
+uint32_t ST_COUNTED_VALUE::s_uiCopyAssignCount = 0;
+uint32_t ST_COUNTED_VALUE::s_uiMoveAssignCount = 0;
+
+struct ST_COUNTED_VALUE_COMPARE
+{
+	bool operator()(const ST_COUNTED_VALUE& lhs, const ST_COUNTED_VALUE& rhs) const
+	{
+		return lhs.iScore > rhs.iScore;
+	}
+};
+
+TEST_CASE(TestUpdateEntrySameRankUsesSingleWritePath)
+{
+	TLeaderboard<uint64_t, ST_COUNTED_VALUE, ST_COUNTED_VALUE_COMPARE> objBoard;
+	objBoard.Reserve(8);
+
+	objBoard.UpdateEntry(1, {100});
+	objBoard.UpdateEntry(2, {90});
+	objBoard.UpdateEntry(3, {80});
+	objBoard.UpdateEntry(4, {70});
+	objBoard.UpdateEntry(5, {60});
+
+	ST_COUNTED_VALUE::ResetCounters();
+
+	uint32_t uiRank = objBoard.UpdateEntry(3, {75});
+	uint32_t uiMutationCount = ST_COUNTED_VALUE::GetMutationCount();
+	assert(uiRank == 3);
+	assert(objBoard.GetRank(3, {75}) == 3);
+	assert(objBoard.GetRank(4, {70}) == 4);
+	assert(uiMutationCount <= 2);
+}
+
+TEST_CASE(TestUpdateEntryMoveForwardUsesSingleBlockMove)
+{
+	TLeaderboard<uint64_t, ST_COUNTED_VALUE, ST_COUNTED_VALUE_COMPARE> objBoard;
+	objBoard.Reserve(8);
+
+	objBoard.UpdateEntry(1, {100});
+	objBoard.UpdateEntry(2, {90});
+	objBoard.UpdateEntry(3, {80});
+	objBoard.UpdateEntry(4, {70});
+	objBoard.UpdateEntry(5, {60});
+
+	ST_COUNTED_VALUE::ResetCounters();
+
+	uint32_t uiRank = objBoard.UpdateEntry(4, {70}, {85});
+	uint32_t uiMutationCount = ST_COUNTED_VALUE::GetMutationCount();
+	assert(uiRank == 3);
+	assert(objBoard.GetRank(4, {85}) == 3);
+	assert(objBoard.GetRank(3, {80}) == 4);
+	assert(uiMutationCount <= 4);
+}
+
+TEST_CASE(TestUpdateEntryMoveBackwardUsesSingleBlockMove)
+{
+	TLeaderboard<uint64_t, ST_COUNTED_VALUE, ST_COUNTED_VALUE_COMPARE> objBoard;
+	objBoard.Reserve(8);
+
+	objBoard.UpdateEntry(1, {100});
+	objBoard.UpdateEntry(2, {90});
+	objBoard.UpdateEntry(3, {80});
+	objBoard.UpdateEntry(4, {70});
+	objBoard.UpdateEntry(5, {60});
+
+	ST_COUNTED_VALUE::ResetCounters();
+
+	uint32_t uiRank = objBoard.UpdateEntry(3, {65});
+	uint32_t uiMutationCount = ST_COUNTED_VALUE::GetMutationCount();
+	assert(uiRank == 4);
+	assert(objBoard.GetRank(4, {70}) == 3);
+	assert(objBoard.GetRank(3, {65}) == 4);
+	assert(uiMutationCount <= 3);
+}
+
+// ============================================================
 //  自定义比较仿函数测试
 // ============================================================
 
@@ -598,6 +732,10 @@ TEST_CASE(TestAscendingOrder)
 
 int main()
 {
+	(void)&s_reg_TestUpdateEntrySameRankUsesSingleWritePath;
+	(void)&s_reg_TestUpdateEntryMoveForwardUsesSingleBlockMove;
+	(void)&s_reg_TestUpdateEntryMoveBackwardUsesSingleBlockMove;
+
 	printf("=== TLeaderboard Unit Tests ===\n");
 	printf("All tests passed.\n");
 	return 0;
