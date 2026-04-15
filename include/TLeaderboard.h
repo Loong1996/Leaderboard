@@ -8,7 +8,7 @@
  *     查询操作 O(1)（ForeachEntryByRank），O(K)（ForeachEntries，K 为请求数量），
  *     更新操作 O(N)（UpdateEntry / RemoveEntry），
  *     GetRank/RemoveEntry: O(log N + K)（传入 value 时二分定位，K 为相等区间大小）
- *     TKey:     玩家唯一标识类型（如 uint64_t，须支持 operator< / operator==）
+ *     TKey:     玩家唯一标识类型（如 uint64_t，须支持 operator<）
  *     TValue:   排序数据类型（POD 结构体、基础类型或指针均可）
  *     TCompare: 比较仿函数，默认 std::greater<TValue>（仅比较 value），
  *               value 相等时内部固定用 key 作为决胜条件
@@ -27,17 +27,12 @@ namespace detail
 	template <typename T>
 	struct HasLess<T, decltype(void(std::declval<const T&>() < std::declval<const T&>()))> : std::true_type {};
 
-	template <typename T, typename = void>
-	struct HasEqual : std::false_type {};
-	template <typename T>
-	struct HasEqual<T, decltype(void(std::declval<const T&>() == std::declval<const T&>()))> : std::true_type {};
 }
 
 template <typename TKey, typename TValue, typename TCompare = std::greater<TValue>>
 class TLeaderboard
 {
-	static_assert(detail::HasLess<TKey>::value,  "TKey 须实现 operator<");
-	static_assert(detail::HasEqual<TKey>::value, "TKey 须实现 operator==");
+	static_assert(detail::HasLess<TKey>::value, "TKey 须实现 operator<");
 
 public:
 	struct ST_RANK_NODE
@@ -289,7 +284,7 @@ private:
 	{
 		for (uint32_t ui = 0; ui < this->GetCount(); ++ui)
 		{
-			if (m_vecRank[ui].key == key)
+			if (!(m_vecRank[ui].key < key) && !(key < m_vecRank[ui].key))
 			{
 				return ui;
 			}
