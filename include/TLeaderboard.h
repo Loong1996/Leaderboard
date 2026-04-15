@@ -6,9 +6,9 @@
  *     百万级实时排行榜模板类。
  *     基于有序 vector 实现，支持自定义排序规则。
  *     查询操作 O(1)（ForeachEntryByRank），O(K)（ForeachEntries，K 为请求数量），
- *     更新操作 O(N)（UpdateEntry / RemoveEntry），
- *     GetRank/RemoveEntry: O(log N + K)（传入 value 时二分定位，K 为相等区间大小）
- *     TKey:     玩家唯一标识类型（如 uint64_t，须支持 operator<）
+ *     GetRank(key, value): O(log N)，GetRank(key) / GetEntry: O(N)，
+ *     更新操作 O(N)（InsertEntry / UpdateEntry / RemoveEntry）
+ *     TKey:     玩家唯一标识类型（如 uint64_t，调用方需保证支持 operator<）
  *     TValue:   排序数据类型（POD 结构体、基础类型或指针均可）
  *     TCompare: 比较仿函数，默认 std::greater<TValue>（仅比较 value），
  *               value 相等时内部固定用 key 作为决胜条件
@@ -87,7 +87,7 @@ public:
 	}
 
 	/**
-	 * @brief 插入或更新排行榜条目（调用方持有旧值时使用，O(log N + K) 定位；oldValue 失配时退化为 O(N)）
+	 * @brief 插入或更新排行榜条目（调用方持有旧值时使用；oldValue 命中时 O(log N) 定位，失配时退化为按 key 线性查找，整体 O(N)）
 	 * @param [in] key 玩家唯一标识
 	 * @param [in] oldValue 旧排序数据（用于二分定位旧条目）
 	 * @param [in] newValue 新排序数据
@@ -130,7 +130,7 @@ public:
 	}
 
 	/**
-	 * @brief 移除排行榜条目（O(log N + K) 二分定位）
+	 * @brief 移除排行榜条目（O(log N) 定位，整体 O(N)）
 	 * @param [in] key 玩家唯一标识
 	 * @param [in] value 排序数据（用于二分定位）
 	 * @return 是否成功移除
@@ -151,7 +151,7 @@ public:
 	// --- 查询操作 ---
 
 	/**
-	 * @brief 获取玩家排名（O(log N + K) 二分定位）
+	 * @brief 获取玩家排名（O(log N) 二分精确定位）
 	 * @param [in] key 玩家唯一标识
 	 * @param [in] value 排序数据（用于二分定位）
 	 * @return 排名（1-based），未找到返回 0

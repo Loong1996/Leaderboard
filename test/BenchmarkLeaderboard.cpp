@@ -655,7 +655,7 @@ static void BenchUpdate(uint32_t uiScale)
 		AddResult("UpdateEntry (更新已有, 无旧值)", uiScale, OPS, sw.ElapsedMs());
 	}
 
-	// 新版：有旧值，O(log N) 二分定位
+	// 新版：有旧值，旧条目 O(log N) 精确定位，整体仍为 O(N)
 	// 预先模拟每次调用时的 oldValue，避免循环内做 vecValuesCopy 更新
 	{
 		struct ST_OP { uint64_t key; int64_t oldValue; int64_t newValue; };
@@ -753,7 +753,7 @@ static void BenchRemoveWithValue(uint32_t uiScale)
 	CStopWatch sw;
 	for (uint32_t ui = 0; ui < OPS; ++ui)
 		objBoard.RemoveEntry(static_cast<uint64_t>(ui + 1), vecScores[ui]);
-	AddResult("RemoveEntry (key+value, O(logN))", uiScale, OPS, sw.ElapsedMs());
+	AddResult("RemoveEntry (key+value, O(N))", uiScale, OPS, sw.ElapsedMs());
 }
 
 static void BenchRemoveByKey(uint32_t uiScale)
@@ -1058,14 +1058,16 @@ tr:hover td { background: #f7f8fa; }
     <table>
       <thead><tr><th>操作</th><th>时间复杂度</th><th>说明</th></tr></thead>
       <tbody>
-        <tr><td>InsertEntry (新插入)</td><td><span class="complexity-tag n">O(log N + N)</span></td><td>二分定位插入位置 + 数组移动，跳过查重</td></tr>
+        <tr><td>InsertEntry (新插入)</td><td><span class="complexity-tag n">O(N)</span></td><td>二分定位插入位置 O(log N) + 数组移动 O(N)，跳过查重</td></tr>
         <tr><td>UpdateEntry (无旧值)</td><td><span class="complexity-tag n">O(N)</span></td><td>线性查找旧条目 + 二分定位插入位置 + 数组移动</td></tr>
-        <tr><td>UpdateEntry (有旧值)</td><td><span class="complexity-tag n">O(log N + N)</span></td><td>二分定位旧条目 + 二分定位插入位置 + 数组移动</td></tr>
+        <tr><td>UpdateEntry (有旧值)</td><td><span class="complexity-tag n">O(N)</span></td><td>oldValue 命中时二分定位旧条目 O(log N)，插入/删除仍需数组移动 O(N)</td></tr>
         <tr><td>GetRank (key+value)</td><td><span class="complexity-tag logn">O(log N)</span></td><td>全序比较器二分精确定位</td></tr>
         <tr><td>GetRank (仅 key)</td><td><span class="complexity-tag n">O(N)</span></td><td>线性扫描匹配 key</td></tr>
-        <tr><td>RemoveEntry (key+value)</td><td><span class="complexity-tag n">O(log N + N)</span></td><td>二分定位 O(log N) + 数组移动 O(N)</td></tr>
+        <tr><td>RemoveEntry (key+value)</td><td><span class="complexity-tag n">O(N)</span></td><td>二分定位 O(log N) + 数组移动 O(N)</td></tr>
         <tr><td>RemoveEntry (仅 key)</td><td><span class="complexity-tag n">O(N)</span></td><td>线性扫描 + 数组移动</td></tr>
-        <tr><td>GetTopN / GetAroundRank / GetEntryByRank</td><td><span class="complexity-tag o1">O(1)</span></td><td>直接指针偏移，零拷贝</td></tr>
+        <tr><td>ForeachEntryByRank</td><td><span class="complexity-tag o1">O(1)</span></td><td>按 rank 直接访问单个节点</td></tr>
+        <tr><td>ForeachEntries</td><td><span class="complexity-tag n">O(K)</span></td><td>遍历请求数量 K 个节点</td></tr>
+        <tr><td>GetEntry</td><td><span class="complexity-tag n">O(N)</span></td><td>线性扫描匹配 key 并输出节点数据</td></tr>
       </tbody>
     </table>
   </div>
@@ -1102,7 +1104,7 @@ function renderSummary() {
       <div class="summary-value">${insertData ? insertData.totalMs.toFixed(0) : '-'} ms</div>
     </div>
     <div class="summary-item blue">
-      <div class="summary-label">GetRank(O(logN)) 平均耗时</div>
+      <div class="summary-label">GetRank(key, value) 平均耗时</div>
       <div class="summary-value">${getRankLogN ? getRankLogN.avgUs.toFixed(3) : '-'} us</div>
     </div>`;
 }

@@ -100,7 +100,7 @@ tr:hover td { background: #f7f8fa; }
 <body>
 <div class="container">
   <h1>TLeaderboard 测试报告</h1>
-  <p class="subtitle">基于有序 vector 实现的百万级实时排行榜 &mdash; 生成时间：Apr 14 2026 10:51:27</p>
+  <p class="subtitle">基于有序 vector 实现的百万级实时排行榜 &mdash; 生成时间：Apr 15 2026 13:51:19</p>
 
   <div class="summary-grid" id="summary"></div>
 
@@ -127,14 +127,16 @@ tr:hover td { background: #f7f8fa; }
     <table>
       <thead><tr><th>操作</th><th>时间复杂度</th><th>说明</th></tr></thead>
       <tbody>
-        <tr><td>InsertEntry (新插入)</td><td><span class="complexity-tag n">O(log N + N)</span></td><td>二分定位插入位置 + 数组移动，跳过查重</td></tr>
+        <tr><td>InsertEntry (新插入)</td><td><span class="complexity-tag n">O(N)</span></td><td>二分定位插入位置 O(log N) + 数组移动 O(N)，跳过查重</td></tr>
         <tr><td>UpdateEntry (无旧值)</td><td><span class="complexity-tag n">O(N)</span></td><td>线性查找旧条目 + 二分定位插入位置 + 数组移动</td></tr>
-        <tr><td>UpdateEntry (有旧值)</td><td><span class="complexity-tag n">O(log N + N)</span></td><td>二分定位旧条目 + 二分定位插入位置 + 数组移动</td></tr>
+        <tr><td>UpdateEntry (有旧值)</td><td><span class="complexity-tag n">O(N)</span></td><td>oldValue 命中时二分定位旧条目 O(log N)，插入/删除仍需数组移动 O(N)</td></tr>
         <tr><td>GetRank (key+value)</td><td><span class="complexity-tag logn">O(log N)</span></td><td>全序比较器二分精确定位</td></tr>
         <tr><td>GetRank (仅 key)</td><td><span class="complexity-tag n">O(N)</span></td><td>线性扫描匹配 key</td></tr>
-        <tr><td>RemoveEntry (key+value)</td><td><span class="complexity-tag n">O(log N + N)</span></td><td>二分定位 O(log N) + 数组移动 O(N)</td></tr>
+        <tr><td>RemoveEntry (key+value)</td><td><span class="complexity-tag n">O(N)</span></td><td>二分定位 O(log N) + 数组移动 O(N)</td></tr>
         <tr><td>RemoveEntry (仅 key)</td><td><span class="complexity-tag n">O(N)</span></td><td>线性扫描 + 数组移动</td></tr>
-        <tr><td>GetTopN / GetAroundRank / GetEntryByRank</td><td><span class="complexity-tag o1">O(1)</span></td><td>直接指针偏移，零拷贝</td></tr>
+        <tr><td>ForeachEntryByRank</td><td><span class="complexity-tag o1">O(1)</span></td><td>按 rank 直接访问单个节点</td></tr>
+        <tr><td>ForeachEntries</td><td><span class="complexity-tag n">O(K)</span></td><td>遍历请求数量 K 个节点</td></tr>
+        <tr><td>GetEntry</td><td><span class="complexity-tag n">O(N)</span></td><td>线性扫描匹配 key 并输出节点数据</td></tr>
       </tbody>
     </table>
   </div>
@@ -152,7 +154,7 @@ const TESTS = [
   {"name":"删除后重新插入","category":"基本操作","passed":true,"detail":""},
   {"name":"按排名获取节点","category":"查询操作","passed":true,"detail":""},
   {"name":"获取 TopN","category":"查询操作","passed":true,"detail":""},
-  {"name":"获取排名附近玩家","category":"查询操作","passed":true,"detail":""},
+  {"name":"获取排名区间","category":"查询操作","passed":true,"detail":""},
   {"name":"按 key 查找节点","category":"查询操作","passed":true,"detail":""},
   {"name":"基本截断","category":"MaxSize 截断","passed":true,"detail":""},
   {"name":"更新已有条目不截断","category":"MaxSize 截断","passed":true,"detail":""},
@@ -170,39 +172,39 @@ const TESTS = [
   {"name":"万级数据正确性","category":"边界情况","passed":true,"detail":""}
 ];
 const BENCH = [
-  {"name":"UpdateEntry (插入新条目)","scale":1000,"ops":1000,"totalMs":0.349,"avgUs":0.349},
-  {"name":"InsertEntry (插入新条目)","scale":1000,"ops":1000,"totalMs":0.1446,"avgUs":0.1446},
-  {"name":"UpdateEntry (更新已有, 无旧值)","scale":1000,"ops":1000,"totalMs":0.6395,"avgUs":0.6395},
-  {"name":"UpdateEntry (更新已有, 有旧值)","scale":1000,"ops":1000,"totalMs":0.4806,"avgUs":0.4806},
-  {"name":"GetRank (key+value, O(logN))","scale":1000,"ops":1000,"totalMs":0.068,"avgUs":0.068},
-  {"name":"GetRank (仅 key, O(N))","scale":1000,"ops":1000,"totalMs":0.2855,"avgUs":0.2855},
-  {"name":"RemoveEntry (key+value, O(logN))","scale":1000,"ops":1000,"totalMs":0.174,"avgUs":0.174},
-  {"name":"RemoveEntry (仅 key, O(N))","scale":1000,"ops":1000,"totalMs":0.3417,"avgUs":0.3417},
-  {"name":"ForeachTopN(100)","scale":1000,"ops":100000,"totalMs":0.1718,"avgUs":0.001718},
-  {"name":"ForeachAroundRank(center, 20)","scale":1000,"ops":100000,"totalMs":0.2853,"avgUs":0.002853},
-  {"name":"ForeachEntryByRank","scale":1000,"ops":100000,"totalMs":0.9128,"avgUs":0.009128},
-  {"name":"UpdateEntry (插入新条目)","scale":10000,"ops":10000,"totalMs":35.5161,"avgUs":3.55161},
-  {"name":"InsertEntry (插入新条目)","scale":10000,"ops":10000,"totalMs":13.0772,"avgUs":1.30772},
-  {"name":"UpdateEntry (更新已有, 无旧值)","scale":10000,"ops":10000,"totalMs":81.2735,"avgUs":8.12735},
-  {"name":"UpdateEntry (更新已有, 有旧值)","scale":10000,"ops":10000,"totalMs":35.7165,"avgUs":3.57165},
-  {"name":"GetRank (key+value, O(logN))","scale":10000,"ops":10000,"totalMs":1.2713,"avgUs":0.12713},
-  {"name":"GetRank (仅 key, O(N))","scale":10000,"ops":10000,"totalMs":22.6874,"avgUs":2.26874},
-  {"name":"RemoveEntry (key+value, O(logN))","scale":10000,"ops":10000,"totalMs":6.6602,"avgUs":0.66602},
-  {"name":"RemoveEntry (仅 key, O(N))","scale":10000,"ops":10000,"totalMs":20.6418,"avgUs":2.06418},
-  {"name":"ForeachTopN(100)","scale":10000,"ops":100000,"totalMs":0.077,"avgUs":0.00077},
-  {"name":"ForeachAroundRank(center, 20)","scale":10000,"ops":100000,"totalMs":0.1505,"avgUs":0.001505},
-  {"name":"ForeachEntryByRank","scale":10000,"ops":100000,"totalMs":0.8544,"avgUs":0.008544},
-  {"name":"UpdateEntry (插入新条目)","scale":100000,"ops":100000,"totalMs":3851.03,"avgUs":38.5103},
-  {"name":"InsertEntry (插入新条目)","scale":100000,"ops":100000,"totalMs":1223.56,"avgUs":12.2356},
-  {"name":"UpdateEntry (更新已有, 无旧值)","scale":100000,"ops":100000,"totalMs":8249.75,"avgUs":82.4975},
-  {"name":"UpdateEntry (更新已有, 有旧值)","scale":100000,"ops":100000,"totalMs":6099.69,"avgUs":60.9969},
-  {"name":"GetRank (key+value, O(logN))","scale":100000,"ops":100000,"totalMs":21.5174,"avgUs":0.215174},
-  {"name":"GetRank (仅 key, O(N))","scale":100000,"ops":100000,"totalMs":2980.42,"avgUs":29.8042},
-  {"name":"RemoveEntry (key+value, O(logN))","scale":100000,"ops":100000,"totalMs":1060.03,"avgUs":10.6003},
-  {"name":"RemoveEntry (仅 key, O(N))","scale":100000,"ops":100000,"totalMs":2680.24,"avgUs":26.8024},
-  {"name":"ForeachTopN(100)","scale":100000,"ops":100000,"totalMs":0.1265,"avgUs":0.001265},
-  {"name":"ForeachAroundRank(center, 20)","scale":100000,"ops":100000,"totalMs":0.1795,"avgUs":0.001795},
-  {"name":"ForeachEntryByRank","scale":100000,"ops":100000,"totalMs":0.516,"avgUs":0.00516}
+  {"name":"UpdateEntry (插入新条目)","scale":1000,"ops":1000,"totalMs":3.8906,"avgUs":3.8906},
+  {"name":"InsertEntry (插入新条目)","scale":1000,"ops":1000,"totalMs":1.1165,"avgUs":1.1165},
+  {"name":"UpdateEntry (更新已有, 无旧值)","scale":1000,"ops":1000,"totalMs":7.6441,"avgUs":7.6441},
+  {"name":"UpdateEntry (更新已有, 有旧值)","scale":1000,"ops":1000,"totalMs":2.3196,"avgUs":2.3196},
+  {"name":"GetRank (key+value, O(logN))","scale":1000,"ops":1000,"totalMs":0.6313,"avgUs":0.6313},
+  {"name":"GetRank (仅 key, O(N))","scale":1000,"ops":1000,"totalMs":5.3507,"avgUs":5.3507},
+  {"name":"RemoveEntry (key+value, O(N))","scale":1000,"ops":1000,"totalMs":1.0415,"avgUs":1.0415},
+  {"name":"RemoveEntry (仅 key, O(N))","scale":1000,"ops":1000,"totalMs":3.4185,"avgUs":3.4185},
+  {"name":"ForeachEntries(1, 100)","scale":1000,"ops":100000,"totalMs":41.4798,"avgUs":0.414798},
+  {"name":"ForeachEntries(mid, 20)","scale":1000,"ops":100000,"totalMs":10.554,"avgUs":0.10554},
+  {"name":"ForeachEntryByRank","scale":1000,"ops":100000,"totalMs":10.0437,"avgUs":0.100437},
+  {"name":"UpdateEntry (插入新条目)","scale":10000,"ops":10000,"totalMs":322.906,"avgUs":32.2906},
+  {"name":"InsertEntry (插入新条目)","scale":10000,"ops":10000,"totalMs":21.9687,"avgUs":2.19687},
+  {"name":"UpdateEntry (更新已有, 无旧值)","scale":10000,"ops":10000,"totalMs":574.842,"avgUs":57.4842},
+  {"name":"UpdateEntry (更新已有, 有旧值)","scale":10000,"ops":10000,"totalMs":55.4556,"avgUs":5.54556},
+  {"name":"GetRank (key+value, O(logN))","scale":10000,"ops":10000,"totalMs":7.1651,"avgUs":0.71651},
+  {"name":"GetRank (仅 key, O(N))","scale":10000,"ops":10000,"totalMs":508.704,"avgUs":50.8704},
+  {"name":"RemoveEntry (key+value, O(N))","scale":10000,"ops":10000,"totalMs":16.0231,"avgUs":1.60231},
+  {"name":"RemoveEntry (仅 key, O(N))","scale":10000,"ops":10000,"totalMs":212.915,"avgUs":21.2915},
+  {"name":"ForeachEntries(1, 100)","scale":10000,"ops":100000,"totalMs":38.7404,"avgUs":0.387404},
+  {"name":"ForeachEntries(mid, 20)","scale":10000,"ops":100000,"totalMs":11.1949,"avgUs":0.111949},
+  {"name":"ForeachEntryByRank","scale":10000,"ops":100000,"totalMs":5.5482,"avgUs":0.055482},
+  {"name":"UpdateEntry (插入新条目)","scale":100000,"ops":100000,"totalMs":28507.8,"avgUs":285.078},
+  {"name":"InsertEntry (插入新条目)","scale":100000,"ops":100000,"totalMs":1138.84,"avgUs":11.3884},
+  {"name":"UpdateEntry (更新已有, 无旧值)","scale":100000,"ops":100000,"totalMs":54507,"avgUs":545.07},
+  {"name":"UpdateEntry (更新已有, 有旧值)","scale":100000,"ops":100000,"totalMs":4253.01,"avgUs":42.5301},
+  {"name":"GetRank (key+value, O(logN))","scale":100000,"ops":100000,"totalMs":84.4774,"avgUs":0.844774},
+  {"name":"GetRank (仅 key, O(N))","scale":100000,"ops":100000,"totalMs":50230,"avgUs":502.3},
+  {"name":"RemoveEntry (key+value, O(N))","scale":100000,"ops":100000,"totalMs":994.559,"avgUs":9.94559},
+  {"name":"RemoveEntry (仅 key, O(N))","scale":100000,"ops":100000,"totalMs":21872,"avgUs":218.72},
+  {"name":"ForeachEntries(1, 100)","scale":100000,"ops":100000,"totalMs":40.0615,"avgUs":0.400615},
+  {"name":"ForeachEntries(mid, 20)","scale":100000,"ops":100000,"totalMs":10.5127,"avgUs":0.105127},
+  {"name":"ForeachEntryByRank","scale":100000,"ops":100000,"totalMs":5.6225,"avgUs":0.056225}
 ];
 
 const COLORS = ['#667eea','#11998e','#f5576c','#4facfe','#fa709a','#fee140','#a18cd1','#fbc2eb'];
@@ -232,7 +234,7 @@ function renderSummary() {
       <div class="summary-value">${insertData ? insertData.totalMs.toFixed(0) : '-'} ms</div>
     </div>
     <div class="summary-item blue">
-      <div class="summary-label">GetRank(O(logN)) 平均耗时</div>
+      <div class="summary-label">GetRank(key, value) 平均耗时</div>
       <div class="summary-value">${getRankLogN ? getRankLogN.avgUs.toFixed(3) : '-'} us</div>
     </div>`;
 }
