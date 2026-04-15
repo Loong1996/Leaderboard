@@ -20,20 +20,9 @@
 #include <algorithm>
 #include <functional>
 
-namespace detail
-{
-	template <typename T, typename = void>
-	struct HasLess : std::false_type {};
-	template <typename T>
-	struct HasLess<T, decltype(void(std::declval<const T&>() < std::declval<const T&>()))> : std::true_type {};
-
-}
-
 template <typename TKey, typename TValue, typename TCompare = std::greater<TValue>>
 class TLeaderboard
 {
-	static_assert(detail::HasLess<TKey>::value, "TKey 须实现 operator<");
-
 public:
 	struct ST_RANK_NODE
 	{
