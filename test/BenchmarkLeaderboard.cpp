@@ -686,6 +686,67 @@ static void Test_LargeScale()
 	CHECK(vecKeys[4] == COUNT - 5);
 }
 
+static void Test_InsertAlwaysFirst()
+{
+	const uint32_t N = 100;
+	TLeaderboard<uint64_t, int64_t> objBoard;
+	objBoard.Reserve(N);
+	for (uint32_t ui = 1; ui <= N; ++ui)
+	{
+		uint32_t uiRank = objBoard.InsertEntry(static_cast<uint64_t>(ui), static_cast<int64_t>(ui));
+		CHECK(uiRank == 1);
+	}
+	CHECK(objBoard.GetCount() == N);
+	CHECK(objBoard.GetRank(N, static_cast<int64_t>(N)) == 1);
+	CHECK(objBoard.GetRank(1, 1) == N);
+}
+
+static void Test_UpdateLastToFirst()
+{
+	const uint32_t N = 50;
+	TLeaderboard<uint64_t, int64_t> objBoard;
+	objBoard.Reserve(N);
+	for (uint32_t ui = 1; ui <= N; ++ui)
+		objBoard.InsertEntry(static_cast<uint64_t>(ui), static_cast<int64_t>(ui));
+
+	// 每轮把当前最后一名（value 最小）更新为当前最高分 + 1
+	int64_t iTopScore = static_cast<int64_t>(N);
+	for (uint32_t uiRound = 0; uiRound < N; ++uiRound)
+	{
+		TLeaderboard<uint64_t, int64_t>::ST_RANK_NODE stLast{};
+		CHECK(objBoard.ForeachEntryByRank(N, [&stLast](uint32_t, const auto& stNode) { stLast = stNode; }) == true);
+		int64_t iOldValue = stLast.value;
+		int64_t iNewValue = iTopScore + 1;
+		uint32_t uiRank = objBoard.UpdateEntry(stLast.key, iOldValue, iNewValue);
+		CHECK(uiRank == 1);
+		CHECK(objBoard.GetCount() == N);
+		iTopScore = iNewValue;
+	}
+}
+
+static void Test_UpdateFirstToLast()
+{
+	const uint32_t N = 50;
+	TLeaderboard<uint64_t, int64_t> objBoard;
+	objBoard.Reserve(N);
+	for (uint32_t ui = 1; ui <= N; ++ui)
+		objBoard.InsertEntry(static_cast<uint64_t>(ui), static_cast<int64_t>(ui));
+
+	// 每轮把当前第一名（value 最大）更新为当前最低分 - 1
+	int64_t iBottomScore = 1;
+	for (uint32_t uiRound = 0; uiRound < N; ++uiRound)
+	{
+		TLeaderboard<uint64_t, int64_t>::ST_RANK_NODE stFirst{};
+		CHECK(objBoard.ForeachEntryByRank(1, [&stFirst](uint32_t, const auto& stNode) { stFirst = stNode; }) == true);
+		int64_t iOldValue = stFirst.value;
+		int64_t iNewValue = iBottomScore - 1;
+		uint32_t uiRank = objBoard.UpdateEntry(stFirst.key, iOldValue, iNewValue);
+		CHECK(uiRank == N);
+		CHECK(objBoard.GetCount() == N);
+		iBottomScore = iNewValue;
+	}
+}
+
 // ============================================================
 //  运行全部单元测试
 // ============================================================
@@ -735,6 +796,9 @@ static void RunUnitTests()
 	RUN_TEST("边界情况", "字符串 key",            Test_StringKey);
 	RUN_TEST("边界情况", "升序排行榜 (std::less)", Test_AscendingOrder);
 	RUN_TEST("边界情况", "万级数据正确性",        Test_LargeScale);
+	RUN_TEST("边界情况", "插入始终第一名",        Test_InsertAlwaysFirst);
+	RUN_TEST("边界情况", "末尾更新到第一名",      Test_UpdateLastToFirst);
+	RUN_TEST("边界情况", "第一名更新到末尾",      Test_UpdateFirstToLast);
 
 	uint32_t uiPassed = 0;
 	uint32_t uiTotal = static_cast<uint32_t>(g_vecTestResults.size());
@@ -1162,6 +1226,83 @@ static void BenchForeachEntryByRank(uint32_t uiScale)
 	AddResult("ForeachEntryByRank", uiScale, OPS, sw.ElapsedMs());
 }
 
+static void BenchInsertAlwaysFirst(uint32_t uiScale)
+{
+	const uint32_t OPS = uiScale;
+
+	TLeaderboard<uint64_t, int64_t> objBoard;
+	objBoard.Reserve(uiScale);
+
+	CStopWatch sw;
+	for (uint32_t ui = 1; ui <= OPS; ++ui)
+		objBoard.InsertEntry(static_cast<uint64_t>(ui), static_cast<int64_t>(ui));
+	AddResult("InsertEntry (始终第一名)", uiScale, OPS, sw.ElapsedMs());
+}
+
+static void BenchUpdateLastToFirst(uint32_t uiScale)
+{
+	TLeaderboard<uint64_t, int64_t> objBoard;
+	objBoard.Reserve(uiScale);
+	for (uint32_t ui = 1; ui <= uiScale; ++ui)
+		objBoard.InsertEntry(static_cast<uint64_t>(ui), static_cast<int64_t>(ui));
+
+	const uint32_t OPS = uiScale;
+	int64_t iTopScore = static_cast<int64_t>(uiScale);
+
+	// 预生成操作序列：每轮把最后一名提升到第一名
+	std::vector<ST_UPDATE_OP> vecOps;
+	vecOps.reserve(OPS);
+	{
+		auto objSim = objBoard;
+		for (uint32_t ui = 0; ui < OPS; ++ui)
+		{
+			TLeaderboard<uint64_t, int64_t>::ST_RANK_NODE stLast{};
+			objSim.ForeachEntryByRank(uiScale, [&stLast](uint32_t, const auto& stNode) { stLast = stNode; });
+			int64_t iNewValue = iTopScore + 1;
+			vecOps.push_back({ stLast.key, stLast.value, iNewValue });
+			objSim.UpdateEntry(stLast.key, stLast.value, iNewValue);
+			iTopScore = iNewValue;
+		}
+	}
+
+	CStopWatch sw;
+	for (const auto& stOp : vecOps)
+		objBoard.UpdateEntry(stOp.key, stOp.oldValue, stOp.newValue);
+	AddResult("UpdateEntry (末尾到第一, 有旧值)", uiScale, OPS, sw.ElapsedMs());
+}
+
+static void BenchUpdateFirstToLast(uint32_t uiScale)
+{
+	TLeaderboard<uint64_t, int64_t> objBoard;
+	objBoard.Reserve(uiScale);
+	for (uint32_t ui = 1; ui <= uiScale; ++ui)
+		objBoard.InsertEntry(static_cast<uint64_t>(ui), static_cast<int64_t>(ui));
+
+	const uint32_t OPS = uiScale;
+	int64_t iBottomScore = 1;
+
+	// 预生成操作序列：每轮把第一名降到末尾
+	std::vector<ST_UPDATE_OP> vecOps;
+	vecOps.reserve(OPS);
+	{
+		auto objSim = objBoard;
+		for (uint32_t ui = 0; ui < OPS; ++ui)
+		{
+			TLeaderboard<uint64_t, int64_t>::ST_RANK_NODE stFirst{};
+			objSim.ForeachEntryByRank(1, [&stFirst](uint32_t, const auto& stNode) { stFirst = stNode; });
+			int64_t iNewValue = iBottomScore - 1;
+			vecOps.push_back({ stFirst.key, stFirst.value, iNewValue });
+			objSim.UpdateEntry(stFirst.key, stFirst.value, iNewValue);
+			iBottomScore = iNewValue;
+		}
+	}
+
+	CStopWatch sw;
+	for (const auto& stOp : vecOps)
+		objBoard.UpdateEntry(stOp.key, stOp.oldValue, stOp.newValue);
+	AddResult("UpdateEntry (第一到末尾, 有旧值)", uiScale, OPS, sw.ElapsedMs());
+}
+
 static void RunBenchmarks()
 {
 	printf("\n=== 性能基准测试 ===\n\n");
@@ -1175,7 +1316,10 @@ static void RunBenchmarks()
 		printf("[数据规模: %u]\n", uiScale);
 
 		BenchInsert(uiScale);
+		BenchInsertAlwaysFirst(uiScale);
 		BenchUpdate(uiScale);
+		BenchUpdateLastToFirst(uiScale);
+		BenchUpdateFirstToLast(uiScale);
 		BenchGetRankWithValue(uiScale);
 		BenchGetRankByKey(uiScale);
 		BenchRemoveWithValue(uiScale);
