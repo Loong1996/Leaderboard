@@ -76,66 +76,66 @@ public:
 
 	/**
 	 * @brief 插入新条目（调用方保证 key 不存在，跳过查重）
-	 * @param [in] key 玩家唯一标识
-	 * @param [in] value 排序数据
+	 * @param [in] rKey 玩家唯一标识
+	 * @param [in] rValue 排序数据
 	 * @return 新排名（1-based），0 表示未上榜（被 MaxSize 截断）
 	 * @note 若 key 已存在会导致重复条目，调用方必须自行保证唯一性
 	 */
-	uint32_t InsertEntry(const TKey& key, const TValue& value)
+	uint32_t InsertEntry(const TKey& rKey, const TValue& rValue)
 	{
-		return this->InsertNode(ST_RANK_NODE{ key, value });
+		return this->InsertNode(ST_RANK_NODE{ rKey, rValue });
 	}
 
 	/**
 	 * @brief 插入或更新排行榜条目（调用方持有旧值时使用；oldValue 命中时 O(log N) 定位，失配时退化为按 key 线性查找，整体 O(N)）
-	 * @param [in] key 玩家唯一标识
-	 * @param [in] oldValue 旧排序数据（用于二分定位旧条目）
-	 * @param [in] newValue 新排序数据
+	 * @param [in] rKey 玩家唯一标识
+	 * @param [in] rOldValue 旧排序数据（用于二分定位旧条目）
+	 * @param [in] rNewValue 新排序数据
 	 * @return 新排名（1-based），0 表示未上榜（被 MaxSize 截断）
 	 */
-	uint32_t UpdateEntry(const TKey& key, const TValue& oldValue, const TValue& newValue)
+	uint32_t UpdateEntry(const TKey& rKey, const TValue& rOldValue, const TValue& rNewValue)
 	{
-		uint32_t uiIndex = this->FindByNode(ST_RANK_NODE{ key, oldValue });
+		uint32_t uiIndex = this->FindByNode(ST_RANK_NODE{ rKey, rOldValue });
 		if (uiIndex >= this->GetCount())
 		{
 			// oldValue 失配时退化到按 key 查找，避免插入重复 key。
-			uiIndex = this->FindByKey(key);
+			uiIndex = this->FindByKey(rKey);
 		}
 
-		return this->UpdateOrInsertNode(uiIndex, ST_RANK_NODE{ key, newValue });
+		return this->UpdateOrInsertNode(uiIndex, ST_RANK_NODE{ rKey, rNewValue });
 	}
 
 	/**
 	 * @brief 插入或更新排行榜条目（无旧值时使用，O(N) 线性扫描）
-	 * @param [in] key 玩家唯一标识
-	 * @param [in] value 排序数据
+	 * @param [in] rKey 玩家唯一标识
+	 * @param [in] rValue 排序数据
 	 * @return 新排名（1-based），0 表示未上榜（被 MaxSize 截断）
 	 */
-	uint32_t UpdateEntry(const TKey& key, const TValue& value)
+	uint32_t UpdateEntry(const TKey& rKey, const TValue& rValue)
 	{
-		return this->UpdateOrInsertNode(this->FindByKey(key), ST_RANK_NODE{ key, value });
+		return this->UpdateOrInsertNode(this->FindByKey(rKey), ST_RANK_NODE{ rKey, rValue });
 	}
 
 	/**
 	 * @brief 移除排行榜条目（O(N) 线性扫描）
-	 * @param [in] key 玩家唯一标识
+	 * @param [in] rKey 玩家唯一标识
 	 * @return 是否成功移除
 	 * @note 性能较差，仅用于无法获取 value 的场景，建议尽可能使用 RemoveEntry(key, value)
 	 */
-	bool RemoveEntry(const TKey& key)
+	bool RemoveEntry(const TKey& rKey)
 	{
-		return this->TryErase(this->FindByKey(key));
+		return this->TryErase(this->FindByKey(rKey));
 	}
 
 	/**
 	 * @brief 移除排行榜条目（O(log N) 定位，整体 O(N)）
-	 * @param [in] key 玩家唯一标识
-	 * @param [in] value 排序数据（用于二分定位）
+	 * @param [in] rKey 玩家唯一标识
+	 * @param [in] rValue 排序数据（用于二分定位）
 	 * @return 是否成功移除
 	 */
-	bool RemoveEntry(const TKey& key, const TValue& value)
+	bool RemoveEntry(const TKey& rKey, const TValue& rValue)
 	{
-		return this->TryErase(this->FindByNode(ST_RANK_NODE{ key, value }));
+		return this->TryErase(this->FindByNode(ST_RANK_NODE{ rKey, rValue }));
 	}
 
 	/**
@@ -150,41 +150,41 @@ public:
 
 	/**
 	 * @brief 获取玩家排名（O(log N) 二分精确定位）
-	 * @param [in] key 玩家唯一标识
-	 * @param [in] value 排序数据（用于二分定位）
+	 * @param [in] rKey 玩家唯一标识
+	 * @param [in] rValue 排序数据（用于二分定位）
 	 * @return 排名（1-based），未找到返回 0
 	 */
-	uint32_t GetRank(const TKey& key, const TValue& value) const
+	uint32_t GetRank(const TKey& rKey, const TValue& rValue) const
 	{
-		return this->IndexToRank(this->FindByNode(ST_RANK_NODE{ key, value }));
+		return this->IndexToRank(this->FindByNode(ST_RANK_NODE{ rKey, rValue }));
 	}
 
 	/**
 	 * @brief 获取玩家排名（O(N) 线性扫描）
-	 * @param [in] key 玩家唯一标识
+	 * @param [in] rKey 玩家唯一标识
 	 * @return 排名（1-based），未找到返回 0
 	 * @note 性能较差，仅用于无法获取 value 的场景，建议尽可能使用 GetRank(key, value)
 	 */
-	uint32_t GetRank(const TKey& key) const
+	uint32_t GetRank(const TKey& rKey) const
 	{
-		return this->IndexToRank(this->FindByKey(key));
+		return this->IndexToRank(this->FindByKey(rKey));
 	}
 
 	/**
 	 * @brief 访问指定排名的节点
 	 * @param [in] uiRank 排名（1-based）
-	 * @param [in] fn 回调函数 void(uint32_t uiRank, const ST_RANK_NODE& stNode)
+	 * @param [in] fnCallback 回调函数 void(uint32_t uiRank, const ST_RANK_NODE& stNode)
 	 * @return 是否找到并调用了回调
 	 */
 	template <typename TFunc>
-	bool ForeachEntryByRank(uint32_t uiRank, TFunc fn) const
+	bool ForeachEntryByRank(uint32_t uiRank, TFunc fnCallback) const
 	{
 		if ((uiRank == 0) || (uiRank > this->GetCount()))
 		{
 			return false;
 		}
 
-		fn(uiRank, m_vecRank[uiRank - 1]);
+		fnCallback(uiRank, m_vecRank[uiRank - 1]);
 		return true;
 	}
 
@@ -192,11 +192,11 @@ public:
 	 * @brief 遍历指定排名区间的条目
 	 * @param [in] uiStartRank 起始排名（1-based）
 	 * @param [in] uiCount 请求数量
-	 * @param [in] fn 回调函数 void(uint32_t uiRank, const ST_RANK_NODE& stNode)
+	 * @param [in] fnCallback 回调函数 void(uint32_t uiRank, const ST_RANK_NODE& stNode)
 	 * @return 实际遍历数量
 	 */
 	template <typename TFunc>
-	uint32_t ForeachEntries(uint32_t uiStartRank, uint32_t uiCount, TFunc fn) const
+	uint32_t ForeachEntries(uint32_t uiStartRank, uint32_t uiCount, TFunc fnCallback) const
 	{
 		if ((uiStartRank == 0) || (uiStartRank > this->GetCount()) || (uiCount == 0))
 		{
@@ -209,21 +209,22 @@ public:
 		uint32_t uiEnd = uiStart + uiActualCount;
 		for (uint32_t ui = uiStart; ui < uiEnd; ++ui)
 		{
-			fn(ui + 1, m_vecRank[ui]);
+			fnCallback(ui + 1, m_vecRank[ui]);
 		}
+
 		return uiActualCount;
 	}
 
 	/**
 	 * @brief 按 key 获取节点及其排名（O(N) 线性扫描）
-	 * @param [in] key 玩家唯一标识
+	 * @param [in] rKey 玩家唯一标识
 	 * @param [out] uiOutRank 排名（1-based）
 	 * @param [out] stOutNode 节点数据
 	 * @return 是否找到
 	 */
-	bool GetEntry(const TKey& key, uint32_t& uiOutRank, ST_RANK_NODE& stOutNode) const
+	bool GetEntry(const TKey& rKey, uint32_t& uiOutRank, ST_RANK_NODE& stOutNode) const
 	{
-		uint32_t uiIndex = this->FindByKey(key);
+		uint32_t uiIndex = this->FindByKey(rKey);
 		if (uiIndex >= this->GetCount())
 		{
 			return false;
@@ -264,14 +265,14 @@ private:
 
 	/**
 	 * @brief 按 key 线性查找
-	 * @param [in] key 玩家唯一标识
+	 * @param [in] rKey 玩家唯一标识
 	 * @return 下标，未找到返回 GetCount()
 	 */
-	uint32_t FindByKey(const TKey& key) const
+	uint32_t FindByKey(const TKey& rKey) const
 	{
 		for (uint32_t ui = 0; ui < this->GetCount(); ++ui)
 		{
-			if (!(m_vecRank[ui].key < key) && !(key < m_vecRank[ui].key))
+			if (!(m_vecRank[ui].key < rKey) && !(rKey < m_vecRank[ui].key))
 			{
 				return ui;
 			}
@@ -283,19 +284,19 @@ private:
 	/**
 	 * @brief 节点全序比较（value 优先，key 决胜）
 	 */
-	bool CompareNodes(const ST_RANK_NODE& lhs, const ST_RANK_NODE& rhs) const
+	bool CompareNodes(const ST_RANK_NODE& rLhs, const ST_RANK_NODE& rRhs) const
 	{
-		if (m_fnCompare(lhs.value, rhs.value))
+		if (m_fnCompare(rLhs.value, rRhs.value))
 		{
 			return true;
 		}
 
-		if (m_fnCompare(rhs.value, lhs.value))
+		if (m_fnCompare(rRhs.value, rLhs.value))
 		{
 			return false;
 		}
 
-		return lhs.key < rhs.key;
+		return rLhs.key < rRhs.key;
 	}
 
 	/**
@@ -303,19 +304,19 @@ private:
 	 */
 	auto NodeComp() const
 	{
-		return [this](const ST_RANK_NODE& lhs, const ST_RANK_NODE& rhs)
+		return [this](const ST_RANK_NODE& rLhs, const ST_RANK_NODE& rRhs)
 		{
-			return this->CompareNodes(lhs, rhs);
+			return this->CompareNodes(rLhs, rRhs);
 		};
 	}
 
 	/**
 	 * @brief 在 [uiBegin, uiEnd) 区间内执行 upper_bound，返回绝对下标
 	 */
-	uint32_t UpperBoundPos(uint32_t uiBegin, uint32_t uiEnd, const ST_RANK_NODE& stNode) const
+	uint32_t UpperBoundPos(uint32_t uiBegin, uint32_t uiEnd, const ST_RANK_NODE& rNode) const
 	{
 		auto it = std::upper_bound(
-			m_vecRank.begin() + uiBegin, m_vecRank.begin() + uiEnd, stNode,
+			m_vecRank.begin() + uiBegin, m_vecRank.begin() + uiEnd, rNode,
 			this->NodeComp());
 
 		return static_cast<uint32_t>(it - m_vecRank.begin());
@@ -323,16 +324,16 @@ private:
 
 	/**
 	 * @brief 二分定位 key+value 对应的下标（全序比较，O(log N) 精确定位）
-	 * @param [in] stNode 包含 key 和 value 的节点
+	 * @param [in] rNode 包含 key 和 value 的节点
 	 * @return 下标，未找到返回 GetCount()
 	 */
-	uint32_t FindByNode(const ST_RANK_NODE& stNode) const
+	uint32_t FindByNode(const ST_RANK_NODE& rNode) const
 	{
 		auto it = std::lower_bound(
-			m_vecRank.begin(), m_vecRank.end(), stNode,
+			m_vecRank.begin(), m_vecRank.end(), rNode,
 			this->NodeComp());
 
-		if (it != m_vecRank.end() && !this->CompareNodes(*it, stNode) && !this->CompareNodes(stNode, *it))
+		if (it != m_vecRank.end() && !this->CompareNodes(*it, rNode) && !this->CompareNodes(rNode, *it))
 		{
 			return static_cast<uint32_t>(it - m_vecRank.begin());
 		}
@@ -343,41 +344,41 @@ private:
 	/**
 	 * @brief 判断节点更新后是否需要向前移动
 	 */
-	bool ShouldMoveForward(uint32_t uiIndex, const ST_RANK_NODE& stNode) const
+	bool ShouldMoveForward(uint32_t uiIndex, const ST_RANK_NODE& rNode) const
 	{
-		return (uiIndex > 0) && this->CompareNodes(stNode, m_vecRank[uiIndex - 1]);
+		return (uiIndex > 0) && this->CompareNodes(rNode, m_vecRank[uiIndex - 1]);
 	}
 
 	/**
 	 * @brief 判断节点更新后是否需要向后移动
 	 */
-	bool ShouldMoveBackward(uint32_t uiIndex, const ST_RANK_NODE& stNode) const
+	bool ShouldMoveBackward(uint32_t uiIndex, const ST_RANK_NODE& rNode) const
 	{
-		return (uiIndex + 1 < this->GetCount()) && this->CompareNodes(m_vecRank[uiIndex + 1], stNode);
+		return (uiIndex + 1 < this->GetCount()) && this->CompareNodes(m_vecRank[uiIndex + 1], rNode);
 	}
 
 	/**
 	 * @brief 对已存在条目执行原地更新或单次块移动更新
 	 */
-	uint32_t UpdateExistingNode(uint32_t uiIndex, const ST_RANK_NODE& stNode)
+	uint32_t UpdateExistingNode(uint32_t uiIndex, const ST_RANK_NODE& rNode)
 	{
-		if (this->ShouldMoveForward(uiIndex, stNode))
+		if (this->ShouldMoveForward(uiIndex, rNode))
 		{
-			uint32_t uiTarget = this->UpperBoundPos(0, uiIndex, stNode);
+			uint32_t uiTarget = this->UpperBoundPos(0, uiIndex, rNode);
 			std::move_backward(m_vecRank.begin() + uiTarget, m_vecRank.begin() + uiIndex, m_vecRank.begin() + uiIndex + 1);
-			m_vecRank[uiTarget] = stNode;
+			m_vecRank[uiTarget] = rNode;
 			return uiTarget + 1;
 		}
 
-		if (this->ShouldMoveBackward(uiIndex, stNode))
+		if (this->ShouldMoveBackward(uiIndex, rNode))
 		{
-			uint32_t uiTarget = this->UpperBoundPos(uiIndex + 1, this->GetCount(), stNode) - 1;
+			uint32_t uiTarget = this->UpperBoundPos(uiIndex + 1, this->GetCount(), rNode) - 1;
 			std::move(m_vecRank.begin() + uiIndex + 1, m_vecRank.begin() + uiTarget + 1, m_vecRank.begin() + uiIndex);
-			m_vecRank[uiTarget] = stNode;
+			m_vecRank[uiTarget] = rNode;
 			return uiTarget + 1;
 		}
 
-		m_vecRank[uiIndex] = stNode;
+		m_vecRank[uiIndex] = rNode;
 		return uiIndex + 1;
 	}
 
@@ -398,12 +399,12 @@ private:
 
 	/**
 	 * @brief 二分查找插入位置并插入节点，处理 MaxSize 截断
-	 * @param [in] stNode 待插入的节点
+	 * @param [in] rNode 待插入的节点
 	 * @return 新排名（1-based），0 表示未上榜（被 MaxSize 截断）
 	 */
-	uint32_t InsertNode(const ST_RANK_NODE& stNode)
+	uint32_t InsertNode(const ST_RANK_NODE& rNode)
 	{
-		uint32_t uiInsertPos = this->UpperBoundPos(0, this->GetCount(), stNode);
+		uint32_t uiInsertPos = this->UpperBoundPos(0, this->GetCount(), rNode);
 
 		// MaxSize 截断检查
 		if ((m_uiMaxSize > 0) && (uiInsertPos >= m_uiMaxSize))
@@ -417,7 +418,7 @@ private:
 			m_vecRank.pop_back();
 		}
 
-		m_vecRank.insert(m_vecRank.begin() + uiInsertPos, stNode);
+		m_vecRank.insert(m_vecRank.begin() + uiInsertPos, rNode);
 
 		return uiInsertPos + 1;
 	}
@@ -425,16 +426,17 @@ private:
 	/**
 	 * @brief 已存在条目时走单次块移动更新，否则走常规插入路径
 	 */
-	uint32_t UpdateOrInsertNode(uint32_t uiIndex, const ST_RANK_NODE& stNode)
+	uint32_t UpdateOrInsertNode(uint32_t uiIndex, const ST_RANK_NODE& rNode)
 	{
 		if (uiIndex >= this->GetCount())
 		{
-			return this->InsertNode(stNode);
+			return this->InsertNode(rNode);
 		}
 
-		return this->UpdateExistingNode(uiIndex, stNode);
+		return this->UpdateExistingNode(uiIndex, rNode);
 	}
 
+private:
 	VEC_RANK_NODE m_vecRank;     // 有序数组（唯一数据源）
 	TCompare      m_fnCompare;   // 比较仿函数
 	uint32_t      m_uiMaxSize;   // 最大容量，0 表示不限制
