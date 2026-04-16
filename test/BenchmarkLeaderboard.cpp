@@ -56,6 +56,7 @@ static bool g_bCurrentPassed = true;
 static std::string g_strCurrentDetail;
 
 static uint64_t MixBenchSink(uint64_t uiSeed, uint32_t uiRank, uint64_t uiKey, int64_t iValue);
+static uint32_t GetHighFrequencyBenchOps(uint32_t uiScale);
 
 #define CHECK(expr) \
 	do { \
@@ -679,6 +680,13 @@ static void Test_MixBenchSinkUsesAllInputs()
 	CHECK(uiWithRank != MixBenchSink(uiBase, 1, 10, 101));
 }
 
+static void Test_GetHighFrequencyBenchOpsByScale()
+{
+	CHECK(GetHighFrequencyBenchOps(1000) == 1000);
+	CHECK(GetHighFrequencyBenchOps(10000) == 10000);
+	CHECK(GetHighFrequencyBenchOps(100000) == 100000);
+}
+
 static void Test_EmptyBoard()
 {
 	TLeaderboard<uint64_t, int64_t> objBoard;
@@ -869,6 +877,7 @@ static void RunUnitTests()
 	RUN_TEST("边界情况", "字符串 key",            Test_StringKey);
 	RUN_TEST("边界情况", "升序排行榜 (std::less)", Test_AscendingOrder);
 	RUN_TEST("边界情况", "Benchmark sink 混入所有输入", Test_MixBenchSinkUsesAllInputs);
+	RUN_TEST("边界情况", "不同规模使用不同 benchmark 次数", Test_GetHighFrequencyBenchOpsByScale);
 	RUN_TEST("边界情况", "万级数据正确性",        Test_LargeScale);
 	RUN_TEST("边界情况", "插入始终第一名",        Test_InsertAlwaysFirst);
 	RUN_TEST("边界情况", "末尾更新到第一名",      Test_UpdateLastToFirst);
@@ -916,6 +925,16 @@ static void ConsumeBenchNode(uint32_t uiRank, uint64_t ulKey, int64_t iValue)
 static void ConsumeBenchScalar(uint64_t uiValue)
 {
 	g_uiBenchSink = MixBenchSink(g_uiBenchSink, 0, uiValue, static_cast<int64_t>(uiValue));
+}
+
+static uint32_t GetHighFrequencyBenchOps(uint32_t uiScale)
+{
+	if (uiScale >= 100000)
+	{
+		return 100000;
+	}
+
+	return uiScale;
 }
 
 static void AddResult(const char* pszName, uint32_t uiScale, uint32_t uiOps,
@@ -1323,7 +1342,7 @@ static void BenchForeachEntries(uint32_t uiScale, uint32_t uiStart, uint32_t uiC
 	for (uint32_t ui = 0; ui < uiScale; ++ui)
 		objBoard.UpdateEntry(ui + 1, distScore(rng));
 
-	const uint32_t OPS = 100000;
+	const uint32_t OPS = GetHighFrequencyBenchOps(uiScale);
 
 	CStopWatch sw;
 	for (uint32_t ui = 0; ui < OPS; ++ui)
@@ -1348,7 +1367,7 @@ static void BenchForeachEntryByRank(uint32_t uiScale)
 	for (uint32_t ui = 0; ui < uiScale; ++ui)
 		objBoard.UpdateEntry(ui + 1, distScore(rng));
 
-	const uint32_t OPS = 100000;
+	const uint32_t OPS = GetHighFrequencyBenchOps(uiScale);
 	std::uniform_int_distribution<uint32_t> distRank(1, uiScale);
 
 	CStopWatch sw;
@@ -1643,12 +1662,6 @@ tr:hover td { background: #f7f8fa; }
 
   <div class="summary-grid" id="summary"></div>
 
-  <!-- 单元测试 -->
-  <div class="card">
-    <h2>单元测试结果</h2>
-    <div id="testResults"></div>
-  </div>
-
   <!-- 性能基准 -->
   <div class="card">
     <h2>性能基准测试 - 按数据规模</h2>
@@ -1678,6 +1691,12 @@ tr:hover td { background: #f7f8fa; }
         <tr><td>GetEntry</td><td><span class="complexity-tag n">O(N)</span></td><td>线性扫描匹配 key 并输出节点数据</td></tr>
       </tbody>
     </table>
+  </div>
+
+  <!-- 单元测试 -->
+  <div class="card">
+    <h2>单元测试结果</h2>
+    <div id="testResults"></div>
   </div>
 </div>
 
