@@ -3,3 +3,5 @@ build/
 .worktrees/
 *.user
 CMakeSettings.json
+Administrator/
+.claude/
