@@ -18,13 +18,6 @@
 #include <fstream>
 #include <sstream>
 
-#ifdef _WIN32
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
-#endif
-
 #include "TLeaderboard.h"
 
 // ============================================================
@@ -1210,27 +1203,6 @@ static std::string JsonEscape(const std::string& str)
 	return result;
 }
 
-static std::string GetDefaultReportPath()
-{
-#ifdef _WIN32
-	char szExePath[MAX_PATH];
-	DWORD dwLength = GetModuleFileNameA(nullptr, szExePath, MAX_PATH);
-	if ((dwLength > 0) && (dwLength < MAX_PATH))
-	{
-		std::string strExePath(szExePath, dwLength);
-		std::replace(strExePath.begin(), strExePath.end(), '\\', '/');
-
-		const std::string strMarker = "/build/test/";
-		size_t uiPos = strExePath.rfind(strMarker);
-		if (uiPos != std::string::npos)
-		{
-			return strExePath.substr(0, uiPos + 6) + "/report.html";
-		}
-	}
-#endif
-
-	return "build/report.html";
-}
 
 // ============================================================
 //  生成 HTML 报告
@@ -1591,9 +1563,7 @@ int main(int argc, char* argv[])
 	RunUnitTests();
 	RunBenchmarks();
 
-	std::string strOutputPath = GetDefaultReportPath();
-	if (argc > 1)
-		strOutputPath = argv[1];
+	std::string strOutputPath = (argc > 1) ? argv[1] : "report.html";
 
 	GenerateHtmlReport(strOutputPath.c_str());
 
