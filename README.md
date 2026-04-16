@@ -332,29 +332,69 @@ bool found = board.GetEntry(playerId, rank, node);
 
 ## 构建与运行
 
-项目使用 `CMake` 构建。
+项目使用 `CMake` 构建，编译器为 **Visual Studio 18 2026**，C++ 标准 **C++14**。
 
-### 构建示例程序
+### 配置工程
+
+首次配置，在项目根目录执行：
 
 ```bash
 cmake -S . -B build
+```
+
+若需要显式指定生成器（多版本 VS 共存时使用）：
+
+```bash
+cmake -S . -B build -G "Visual Studio 18 2026" -A x64
+```
+
+### 编译
+
+```bash
+# Release 构建（推荐）
 cmake --build build --config Release
+
+# Debug 构建
+cmake --build build --config Debug
 ```
 
 生成目标：
 
-- `ranklist_demo`：示例程序，入口见 [`src/main.cpp`](/D:/Code/RankList/src/main.cpp)
-- `benchmark_leaderboard`：测试与基准程序
+- `build/Release/ranklist_demo.exe`：使用示例程序，入口见 [`src/main.cpp`](/D:/Code/RankList/src/main.cpp)
+- `build/test/Release/benchmark_leaderboard.exe`：单元测试 + 基准测试程序
+
+### 运行示例
+
+```bash
+./build/Release/ranklist_demo.exe
+```
 
 ### 运行测试
 
-测试目标在 [`test/CMakeLists.txt`](/D:/Code/RankList/test/CMakeLists.txt) 中注册为 `TestLeaderboard`。构建后可用：
+测试目标在 [`test/CMakeLists.txt`](/D:/Code/RankList/test/CMakeLists.txt) 中注册为 `TestLeaderboard`。
 
 ```bash
-ctest --test-dir build --output-on-failure
+# 运行全部测试
+ctest --test-dir build -C Release --output-on-failure
+
+# 直接运行测试程序（同时生成 HTML 报告）
+./build/test/Release/benchmark_leaderboard.exe report.html
 ```
 
-测试程序还会生成 `report.html` 报告文件，用于查看基准测试结果。
+测试程序运行完成后会在指定路径生成 `report.html`，包含所有单元测试结果和基准测试数据的可视化报告。
+
+### 重新配置
+
+修改 `CMakeLists.txt` 后无需手动删除 `build/`，直接重新执行 `cmake -S . -B build` 即可更新工程文件。如需完全重新构建：
+
+```bash
+# 清理构建产物（保留 CMake 配置缓存）
+cmake --build build --target clean
+
+# 或直接删除 build 目录后重新配置
+rm -rf build
+cmake -S . -B build
+```
 
 ## 项目结构
 
