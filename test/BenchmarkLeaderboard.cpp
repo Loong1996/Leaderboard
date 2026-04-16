@@ -55,6 +55,8 @@ static std::vector<ST_TEST_RESULT> g_vecTestResults;
 static bool g_bCurrentPassed = true;
 static std::string g_strCurrentDetail;
 
+static uint64_t MixBenchSink(uint64_t uiSeed, uint32_t uiRank, uint64_t uiKey, int64_t iValue);
+
 #define CHECK(expr) \
 	do { \
 		if (!(expr)) { \
@@ -327,6 +329,20 @@ static void Test_RemoveByKey()
 	CHECK(objBoard.RemoveEntry(9999) == false);
 }
 
+static void Test_RemoveWithWrongValueDoesNotErase()
+{
+	TLeaderboard<uint64_t, int64_t> objBoard;
+	objBoard.UpdateEntry(1001, 500);
+	objBoard.UpdateEntry(1002, 800);
+	objBoard.UpdateEntry(1003, 300);
+
+	CHECK(objBoard.RemoveEntry(1002, 700) == false);
+	CHECK(objBoard.GetCount() == 3);
+	CHECK(objBoard.GetRank(1002, 800) == 1);
+	CHECK(objBoard.GetRank(1001, 500) == 2);
+	CHECK(objBoard.GetRank(1003, 300) == 3);
+}
+
 static void Test_Clear()
 {
 	TLeaderboard<uint64_t, int64_t> objBoard;
@@ -551,6 +567,37 @@ static void Test_MaxSizeOne()
 	CHECK(objBoard.GetCount() == 1);
 }
 
+static void Test_UpdateMissingKeyWithStaleOldValueInserts()
+{
+	TLeaderboard<uint64_t, int64_t> objBoard;
+	objBoard.UpdateEntry(1, 100);
+	objBoard.UpdateEntry(2, 200);
+
+	uint32_t uiRank = objBoard.UpdateEntry(3, 999, 150);
+	CHECK(uiRank == 2);
+	CHECK(objBoard.GetCount() == 3);
+	CHECK(objBoard.GetRank(2, 200) == 1);
+	CHECK(objBoard.GetRank(3, 150) == 2);
+	CHECK(objBoard.GetRank(1, 100) == 3);
+	CHECK(objBoard.GetRank(3, 999) == 0);
+}
+
+static void Test_MaxSizeTieBreakReplacement()
+{
+	TLeaderboard<uint64_t, int64_t> objBoard(3);
+	objBoard.UpdateEntry(10, 500);
+	objBoard.UpdateEntry(20, 500);
+	objBoard.UpdateEntry(30, 500);
+
+	uint32_t uiRank = objBoard.UpdateEntry(15, 500);
+	CHECK(uiRank == 2);
+	CHECK(objBoard.GetCount() == 3);
+	CHECK(objBoard.GetRank(10, 500) == 1);
+	CHECK(objBoard.GetRank(15, 500) == 2);
+	CHECK(objBoard.GetRank(20, 500) == 3);
+	CHECK(objBoard.GetRank(30, 500) == 0);
+}
+
 static void Test_Reserve()
 {
 	TLeaderboard<uint64_t, int64_t> objBoard;
@@ -608,6 +655,28 @@ static void Test_CustomCompareRemove()
 	CHECK(objBoard.GetRank(1, {100, 10}) == 1);
 	objBoard.UpdateEntry(2, {300, 40});
 	CHECK(objBoard.GetRank(2, {300, 40}) == 1);
+}
+
+static void Test_CustomCompareEqualValueFallsBackToKey()
+{
+	TLeaderboard<uint64_t, ST_RANK_DATA, ST_RANK_DATA_COMPARE> objBoard;
+	objBoard.UpdateEntry(20, {100, 10});
+	objBoard.UpdateEntry(10, {100, 10});
+	objBoard.UpdateEntry(30, {100, 10});
+
+	CHECK(objBoard.GetRank(10, {100, 10}) == 1);
+	CHECK(objBoard.GetRank(20, {100, 10}) == 2);
+	CHECK(objBoard.GetRank(30, {100, 10}) == 3);
+}
+
+static void Test_MixBenchSinkUsesAllInputs()
+{
+	const uint64_t uiBase = 0;
+	const uint64_t uiWithRank = MixBenchSink(uiBase, 1, 10, 100);
+	CHECK(uiWithRank != uiBase);
+	CHECK(uiWithRank != MixBenchSink(uiBase, 2, 10, 100));
+	CHECK(uiWithRank != MixBenchSink(uiBase, 1, 11, 100));
+	CHECK(uiWithRank != MixBenchSink(uiBase, 1, 10, 101));
 }
 
 static void Test_EmptyBoard()
@@ -764,9 +833,11 @@ static void RunUnitTests()
 	RUN_TEST("基本操作", "UpdateEntry 向后移动",  Test_UpdateMoveBackwardUsesSingleBlockMove);
 	RUN_TEST("基本操作", "按 key+value 删除",     Test_RemoveWithValue);
 	RUN_TEST("基本操作", "按 key 删除",           Test_RemoveByKey);
+	RUN_TEST("基本操作", "错误 value 不误删",     Test_RemoveWithWrongValueDoesNotErase);
 	RUN_TEST("基本操作", "清空排行榜",            Test_Clear);
 	RUN_TEST("基本操作", "按 key 查询排名",       Test_GetRankByKey);
 	RUN_TEST("基本操作", "删除后重新插入",        Test_RemoveReinsert);
+	RUN_TEST("基本操作", "不存在 key 的 stale oldValue 按插入处理", Test_UpdateMissingKeyWithStaleOldValueInserts);
 
 	printf("\n[查询操作]\n");
 	RUN_TEST("查询操作", "按排名获取节点",        Test_GetEntryByRank);
@@ -780,6 +851,7 @@ static void RunUnitTests()
 	RUN_TEST("MaxSize 截断", "旧值失配时更新已有条目", Test_MaxSizeUpdateWithStaleOldValue);
 	RUN_TEST("MaxSize 截断", "动态 SetMaxSize",    Test_SetMaxSize);
 	RUN_TEST("MaxSize 截断", "MaxSize=1 极限场景", Test_MaxSizeOne);
+	RUN_TEST("MaxSize 截断", "同分 tie-break 替换末尾", Test_MaxSizeTieBreakReplacement);
 	RUN_TEST("MaxSize 截断", "Reserve 预分配",     Test_Reserve);
 
 	printf("\n[同分排序]\n");
@@ -789,12 +861,14 @@ static void RunUnitTests()
 	printf("\n[自定义比较器]\n");
 	RUN_TEST("自定义比较器", "多维排序",           Test_CustomCompare);
 	RUN_TEST("自定义比较器", "多维排序增删",       Test_CustomCompareRemove);
+	RUN_TEST("自定义比较器", "完全相等时按 key 决胜", Test_CustomCompareEqualValueFallsBackToKey);
 
 	printf("\n[边界情况]\n");
 	RUN_TEST("边界情况", "空排行榜",              Test_EmptyBoard);
 	RUN_TEST("边界情况", "单条目",                Test_SingleEntry);
 	RUN_TEST("边界情况", "字符串 key",            Test_StringKey);
 	RUN_TEST("边界情况", "升序排行榜 (std::less)", Test_AscendingOrder);
+	RUN_TEST("边界情况", "Benchmark sink 混入所有输入", Test_MixBenchSinkUsesAllInputs);
 	RUN_TEST("边界情况", "万级数据正确性",        Test_LargeScale);
 	RUN_TEST("边界情况", "插入始终第一名",        Test_InsertAlwaysFirst);
 	RUN_TEST("边界情况", "末尾更新到第一名",      Test_UpdateLastToFirst);
@@ -822,6 +896,27 @@ struct ST_BENCH_RESULT
 };
 
 static std::vector<ST_BENCH_RESULT> g_vecBenchResults;
+static volatile uint64_t g_uiBenchSink = 0;
+
+static uint64_t MixBenchSink(uint64_t uiSeed, uint32_t uiRank, uint64_t uiKey, int64_t iValue)
+{
+	uint64_t uiValueBits = static_cast<uint64_t>(iValue);
+	uint64_t uiMixed = uiSeed ^ 0x9e3779b97f4a7c15ULL;
+	uiMixed ^= static_cast<uint64_t>(uiRank) + 0x9e3779b9ULL + (uiMixed << 6) + (uiMixed >> 2);
+	uiMixed ^= uiKey + 0x85ebca6bULL + (uiMixed << 6) + (uiMixed >> 2);
+	uiMixed ^= uiValueBits + 0xc2b2ae35ULL + (uiMixed << 6) + (uiMixed >> 2);
+	return uiMixed;
+}
+
+static void ConsumeBenchNode(uint32_t uiRank, uint64_t ulKey, int64_t iValue)
+{
+	g_uiBenchSink = MixBenchSink(g_uiBenchSink, uiRank, ulKey, iValue);
+}
+
+static void ConsumeBenchScalar(uint64_t uiValue)
+{
+	g_uiBenchSink = MixBenchSink(g_uiBenchSink, 0, uiValue, static_cast<int64_t>(uiValue));
+}
 
 static void AddResult(const char* pszName, uint32_t uiScale, uint32_t uiOps,
                        double dbTotalMs)
@@ -904,6 +999,17 @@ static std::vector<ST_UPDATE_OP> BuildBackwardUpdateOps(const std::vector<int64_
 	for (uint32_t key = 2; (key < uiScale) && (vecOps.size() < vecOps.capacity()); key += 4)
 	{
 		vecOps.push_back({ key, vecValues[key], vecValues[key] - 150 });
+	}
+
+	return vecOps;
+}
+
+static std::vector<ST_UPDATE_OP> BuildStaleOldValueUpdateOps(const std::vector<int64_t>& vecValues, uint32_t uiScale)
+{
+	std::vector<ST_UPDATE_OP> vecOps = BuildSameRankUpdateOps(vecValues, uiScale);
+	for (auto& stOp : vecOps)
+	{
+		stOp.oldValue += 1;
 	}
 
 	return vecOps;
@@ -1056,6 +1162,21 @@ static void BenchUpdate(uint32_t uiScale)
 		uiScale,
 		objSpacedBoard,
 		BuildBackwardUpdateOps(vecSpacedValues, uiScale));
+
+	{
+		auto vecOps = BuildStaleOldValueUpdateOps(vecSpacedValues, uiScale);
+		const uint32_t uiOps = static_cast<uint32_t>(vecOps.size());
+		if (uiOps > 0)
+		{
+			auto objBoardCopy = objSpacedBoard;
+			CStopWatch sw;
+			for (const auto& stOp : vecOps)
+			{
+				objBoardCopy.UpdateEntry(stOp.key, stOp.oldValue, stOp.newValue);
+			}
+			AddResult("UpdateEntry (stale oldValue, key exists)", uiScale, uiOps, sw.ElapsedMs());
+		}
+	}
 }
 
 static void BenchGetRankWithValue(uint32_t uiScale)
@@ -1116,6 +1237,39 @@ static void BenchGetRankByKey(uint32_t uiScale)
 	AddResult("GetRank (仅 key, O(N))", uiScale, OPS, sw.ElapsedMs());
 }
 
+static void BenchGetEntry(uint32_t uiScale)
+{
+	TLeaderboard<uint64_t, int64_t> objBoard;
+	objBoard.Reserve(uiScale);
+
+	std::mt19937 rng(42);
+	std::uniform_int_distribution<int64_t> distScore(0, 10000000);
+
+	for (uint32_t ui = 0; ui < uiScale; ++ui)
+		objBoard.UpdateEntry(ui + 1, distScore(rng));
+
+	const uint32_t OPS = std::min(uiScale, (uint32_t)100000);
+	std::uniform_int_distribution<uint64_t> distKey(1, uiScale);
+
+	std::vector<uint64_t> vecKeys(OPS);
+	for (uint32_t ui = 0; ui < OPS; ++ui)
+		vecKeys[ui] = distKey(rng);
+
+	CStopWatch sw;
+	for (uint32_t ui = 0; ui < OPS; ++ui)
+	{
+		uint32_t uiRank = 0;
+		TLeaderboard<uint64_t, int64_t>::ST_RANK_NODE stNode{};
+		bool bFound = objBoard.GetEntry(vecKeys[ui], uiRank, stNode);
+		ConsumeBenchScalar(static_cast<uint64_t>(bFound));
+		if (bFound)
+		{
+			ConsumeBenchNode(uiRank, stNode.key, stNode.value);
+		}
+	}
+	AddResult("GetEntry (key, O(N))", uiScale, OPS, sw.ElapsedMs());
+}
+
 static void BenchRemoveWithValue(uint32_t uiScale)
 {
 	TLeaderboard<uint64_t, int64_t> objBoard;
@@ -1158,7 +1312,7 @@ static void BenchRemoveByKey(uint32_t uiScale)
 	AddResult("RemoveEntry (仅 key, O(N))", uiScale, OPS, sw.ElapsedMs());
 }
 
-static void BenchForeachEntriesTop(uint32_t uiScale)
+static void BenchForeachEntries(uint32_t uiScale, uint32_t uiStart, uint32_t uiCount, const char* pszName)
 {
 	TLeaderboard<uint64_t, int64_t> objBoard;
 	objBoard.Reserve(uiScale);
@@ -1174,33 +1328,13 @@ static void BenchForeachEntriesTop(uint32_t uiScale)
 	CStopWatch sw;
 	for (uint32_t ui = 0; ui < OPS; ++ui)
 	{
-		volatile uint32_t r = objBoard.ForeachEntries(1, 100, [](uint32_t, const auto&) {});
-		(void)r;
+		uint32_t uiVisited = objBoard.ForeachEntries(uiStart, uiCount, [](uint32_t uiRank, const auto& stNode)
+		{
+			ConsumeBenchNode(uiRank, stNode.key, stNode.value);
+		});
+		ConsumeBenchScalar(uiVisited);
 	}
-	AddResult("ForeachEntries(1, 100)", uiScale, OPS, sw.ElapsedMs());
-}
-
-static void BenchForeachEntriesMid(uint32_t uiScale)
-{
-	TLeaderboard<uint64_t, int64_t> objBoard;
-	objBoard.Reserve(uiScale);
-
-	std::mt19937 rng(42);
-	std::uniform_int_distribution<int64_t> distScore(0, 10000000);
-
-	for (uint32_t ui = 0; ui < uiScale; ++ui)
-		objBoard.UpdateEntry(ui + 1, distScore(rng));
-
-	const uint32_t OPS = 100000;
-	uint32_t uiStart = uiScale / 2;
-
-	CStopWatch sw;
-	for (uint32_t ui = 0; ui < OPS; ++ui)
-	{
-		volatile uint32_t r = objBoard.ForeachEntries(uiStart, 20, [](uint32_t, const auto&) {});
-		(void)r;
-	}
-	AddResult("ForeachEntries(mid, 20)", uiScale, OPS, sw.ElapsedMs());
+	AddResult(pszName, uiScale, OPS, sw.ElapsedMs());
 }
 
 static void BenchForeachEntryByRank(uint32_t uiScale)
@@ -1220,8 +1354,11 @@ static void BenchForeachEntryByRank(uint32_t uiScale)
 	CStopWatch sw;
 	for (uint32_t ui = 0; ui < OPS; ++ui)
 	{
-		volatile bool b = objBoard.ForeachEntryByRank(distRank(rng), [](uint32_t, const auto&) {});
-		(void)b;
+		bool bFound = objBoard.ForeachEntryByRank(distRank(rng), [](uint32_t uiRank, const auto& stNode)
+		{
+			ConsumeBenchNode(uiRank, stNode.key, stNode.value);
+		});
+		ConsumeBenchScalar(static_cast<uint64_t>(bFound));
 	}
 	AddResult("ForeachEntryByRank", uiScale, OPS, sw.ElapsedMs());
 }
@@ -1322,10 +1459,17 @@ static void RunBenchmarks()
 		BenchUpdateFirstToLast(uiScale);
 		BenchGetRankWithValue(uiScale);
 		BenchGetRankByKey(uiScale);
+		BenchGetEntry(uiScale);
 		BenchRemoveWithValue(uiScale);
 		BenchRemoveByKey(uiScale);
-		BenchForeachEntriesTop(uiScale);
-		BenchForeachEntriesMid(uiScale);
+		BenchForeachEntries(uiScale, 1, 1, "ForeachEntries(top, 1)");
+		BenchForeachEntries(uiScale, 1, 20, "ForeachEntries(top, 20)");
+		BenchForeachEntries(uiScale, 1, 100, "ForeachEntries(top, 100)");
+		BenchForeachEntries(uiScale, 1, 1000, "ForeachEntries(top, 1000)");
+		BenchForeachEntries(uiScale, std::max(1u, uiScale / 2), 1, "ForeachEntries(mid, 1)");
+		BenchForeachEntries(uiScale, std::max(1u, uiScale / 2), 20, "ForeachEntries(mid, 20)");
+		BenchForeachEntries(uiScale, std::max(1u, uiScale / 2), 100, "ForeachEntries(mid, 100)");
+		BenchForeachEntries(uiScale, std::max(1u, uiScale / 2), 1000, "ForeachEntries(mid, 1000)");
 		BenchForeachEntryByRank(uiScale);
 
 		printf("\n");
@@ -1523,14 +1667,14 @@ tr:hover td { background: #f7f8fa; }
       <thead><tr><th>操作</th><th>时间复杂度</th><th>说明</th></tr></thead>
       <tbody>
         <tr><td>InsertEntry (新插入)</td><td><span class="complexity-tag n">O(N)</span></td><td>二分定位插入位置 O(log N) + 数组移动 O(N)，跳过查重</td></tr>
-        <tr><td>UpdateEntry (无旧值)</td><td><span class="complexity-tag n">O(N)</span></td><td>线性查找旧条目；排名不变时原地覆盖，前后移动时单次块移动</td></tr>
-        <tr><td>UpdateEntry (有旧值)</td><td><span class="complexity-tag n">O(N)</span></td><td>oldValue 命中时旧条目定位 O(log N)；排名不变时原地覆盖，前后移动时单次块移动</td></tr>
+        <tr><td>UpdateEntry (无旧值)</td><td><span class="complexity-tag n">O(N)</span></td><td>最坏情况需线性查找 key；排名不变时原地覆盖，前后移动时单次块移动</td></tr>
+        <tr><td>UpdateEntry (有旧值)</td><td><span class="complexity-tag n">O(N)</span></td><td>表中为最坏情况。oldValue 命中时旧条目定位 O(log N)；失配时退化为按 key 线性扫描</td></tr>
         <tr><td>GetRank (key+value)</td><td><span class="complexity-tag logn">O(log N)</span></td><td>全序比较器二分精确定位</td></tr>
         <tr><td>GetRank (仅 key)</td><td><span class="complexity-tag n">O(N)</span></td><td>线性扫描匹配 key</td></tr>
         <tr><td>RemoveEntry (key+value)</td><td><span class="complexity-tag n">O(N)</span></td><td>二分定位 O(log N) + 数组移动 O(N)</td></tr>
         <tr><td>RemoveEntry (仅 key)</td><td><span class="complexity-tag n">O(N)</span></td><td>线性扫描 + 数组移动</td></tr>
         <tr><td>ForeachEntryByRank</td><td><span class="complexity-tag o1">O(1)</span></td><td>按 rank 直接访问单个节点</td></tr>
-        <tr><td>ForeachEntries</td><td><span class="complexity-tag n">O(K)</span></td><td>遍历请求数量 K 个节点</td></tr>
+        <tr><td>ForeachEntries</td><td><span class="complexity-tag n">O(K)</span></td><td>与实际遍历数量线性相关，即 min(K, remaining)</td></tr>
         <tr><td>GetEntry</td><td><span class="complexity-tag n">O(N)</span></td><td>线性扫描匹配 key 并输出节点数据</td></tr>
       </tbody>
     </table>
@@ -1551,7 +1695,7 @@ function renderSummary() {
   const scales = [...new Set(BENCH.map(d => d.scale))].sort((a,b) => a-b);
   const maxScale = scales[scales.length - 1];
   const maxData = BENCH.filter(d => d.scale === maxScale);
-  const insertData = maxData.find(d => d.name.includes('插入'));
+  const insertData = maxData.find(d => d.name.startsWith('InsertEntry'));
   const getRankLogN = maxData.find(d => d.name.includes('O(logN)') && d.name.includes('GetRank'));
 
   document.getElementById('summary').innerHTML = `
