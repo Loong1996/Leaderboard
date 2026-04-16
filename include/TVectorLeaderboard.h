@@ -1,5 +1,5 @@
 /**
- * @file TLeaderboard.h
+ * @file TVectorLeaderboard.h
  * @author Loong
  * @date 2026-04-08
  * @details
@@ -21,7 +21,7 @@
 #include <functional>
 
 template <typename TKey, typename TValue, typename TCompare = std::greater<TValue>>
-class TLeaderboard
+class TVectorLeaderboard
 {
 public:
 	struct ST_RANK_NODE
@@ -31,13 +31,13 @@ public:
 	};
 
 public:
-	explicit TLeaderboard(uint32_t uiMaxSize = 0, TCompare fnCompare = TCompare())
+	explicit TVectorLeaderboard(uint32_t uiMaxSize = 0, TCompare fnCompare = TCompare())
 		: m_fnCompare(fnCompare)
 		, m_uiMaxSize(uiMaxSize)
 	{
 	}
 
-	~TLeaderboard() = default;
+	~TVectorLeaderboard() = default;
 
 	/**
 	 * @brief 设置排行榜最大数量（0 表示不限制）

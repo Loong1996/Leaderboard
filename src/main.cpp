@@ -3,7 +3,7 @@
  * @author Loong
  * @date 2026-04-08
  * @details
- *     TLeaderboard 使用示例与性能基准测试。
+ *     TVectorLeaderboard 使用示例与性能基准测试。
  */
 #include <cstdint>
 #include <cstdio>
@@ -12,7 +12,7 @@
 #include <random>
 #include <vector>
 
-#include "TLeaderboard.h"
+#include "TVectorLeaderboard.h"
 
 // ============================================================
 //  自定义排序示例：分数 > 战力 > 时间
@@ -70,7 +70,7 @@ static void ShowUsageExample()
 	printf("=== Usage Example ===\n");
 
 	// 简单分数排行榜
-	TLeaderboard<uint64_t, int64_t> objSimpleBoard;
+	TVectorLeaderboard<uint64_t, int64_t> objSimpleBoard;
 	objSimpleBoard.UpdateEntry(1001, 500);
 	objSimpleBoard.UpdateEntry(1002, 800);
 	objSimpleBoard.UpdateEntry(1003, 300);
@@ -86,7 +86,7 @@ static void ShowUsageExample()
 	});
 
 	// 多维排序排行榜（MaxSize = 3）
-	TLeaderboard<uint64_t, ST_RANK_DATA, ST_RANK_DATA_COMPARE> objMultiBoard(3);
+	TVectorLeaderboard<uint64_t, ST_RANK_DATA, ST_RANK_DATA_COMPARE> objMultiBoard(3);
 	objMultiBoard.UpdateEntry(1, {100, 5000, 1000});
 	objMultiBoard.UpdateEntry(2, {100, 5000, 2000});
 	objMultiBoard.UpdateEntry(3, {100, 6000, 3000});
@@ -114,7 +114,7 @@ static void RunBenchmark()
 	const uint32_t PLAYER_COUNT = 100000;
 	printf("=== Benchmark (%u players) ===\n", PLAYER_COUNT);
 
-	TLeaderboard<uint64_t, int64_t> objBoard;
+	TVectorLeaderboard<uint64_t, int64_t> objBoard;
 
 	std::mt19937 rng(42);
 	std::uniform_int_distribution<int64_t> distScore(0, 10000000);

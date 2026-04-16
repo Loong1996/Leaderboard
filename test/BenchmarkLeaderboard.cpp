@@ -3,7 +3,7 @@
  * @author Loong
  * @date 2026-04-13
  * @details
- *     TLeaderboard 单元测试 + 性能基准测试。
+ *     TVectorLeaderboard 单元测试 + 性能基准测试。
  *     运行全部测试用例和基准测试，生成 HTML 可视化报告。
  */
 #include <cstdint>
@@ -18,7 +18,7 @@
 #include <fstream>
 #include <sstream>
 
-#include "TLeaderboard.h"
+#include "TVectorLeaderboard.h"
 
 // ============================================================
 //  计时辅助
@@ -119,7 +119,7 @@ struct ST_RANK_DATA_COMPARE
 
 static void Test_InsertAndGetRank()
 {
-	TLeaderboard<uint64_t, int64_t> objBoard;
+	TVectorLeaderboard<uint64_t, int64_t> objBoard;
 	objBoard.UpdateEntry(1001, 500);
 	objBoard.UpdateEntry(1002, 800);
 	objBoard.UpdateEntry(1003, 300);
@@ -131,7 +131,7 @@ static void Test_InsertAndGetRank()
 
 static void Test_UpdateExisting()
 {
-	TLeaderboard<uint64_t, int64_t> objBoard;
+	TVectorLeaderboard<uint64_t, int64_t> objBoard;
 	objBoard.UpdateEntry(1001, 500);
 	objBoard.UpdateEntry(1002, 800);
 	objBoard.UpdateEntry(1003, 300);
@@ -145,7 +145,7 @@ static void Test_UpdateExisting()
 
 static void Test_UpdateExistingWithStaleOldValue()
 {
-	TLeaderboard<uint64_t, int64_t> objBoard;
+	TVectorLeaderboard<uint64_t, int64_t> objBoard;
 	objBoard.UpdateEntry(1001, 500);
 	objBoard.UpdateEntry(1002, 800);
 	objBoard.UpdateEntry(1003, 300);
@@ -164,7 +164,7 @@ static void Test_UpdateExistingWithStaleOldValue()
 
 static void Test_ReturnValue()
 {
-	TLeaderboard<uint64_t, int64_t> objBoard;
+	TVectorLeaderboard<uint64_t, int64_t> objBoard;
 	CHECK(objBoard.UpdateEntry(1001, 500) == 1);
 	CHECK(objBoard.UpdateEntry(1002, 800) == 1);
 	CHECK(objBoard.UpdateEntry(1003, 300) == 3);
@@ -242,7 +242,7 @@ struct ST_COUNTED_VALUE_COMPARE
 
 static void Test_UpdateSameRankUsesSingleWritePath()
 {
-	TLeaderboard<uint64_t, ST_COUNTED_VALUE, ST_COUNTED_VALUE_COMPARE> objBoard;
+	TVectorLeaderboard<uint64_t, ST_COUNTED_VALUE, ST_COUNTED_VALUE_COMPARE> objBoard;
 	objBoard.Reserve(8);
 
 	objBoard.UpdateEntry(1, {100});
@@ -263,7 +263,7 @@ static void Test_UpdateSameRankUsesSingleWritePath()
 
 static void Test_UpdateMoveForwardUsesSingleBlockMove()
 {
-	TLeaderboard<uint64_t, ST_COUNTED_VALUE, ST_COUNTED_VALUE_COMPARE> objBoard;
+	TVectorLeaderboard<uint64_t, ST_COUNTED_VALUE, ST_COUNTED_VALUE_COMPARE> objBoard;
 	objBoard.Reserve(8);
 
 	objBoard.UpdateEntry(1, {100});
@@ -284,7 +284,7 @@ static void Test_UpdateMoveForwardUsesSingleBlockMove()
 
 static void Test_UpdateMoveBackwardUsesSingleBlockMove()
 {
-	TLeaderboard<uint64_t, ST_COUNTED_VALUE, ST_COUNTED_VALUE_COMPARE> objBoard;
+	TVectorLeaderboard<uint64_t, ST_COUNTED_VALUE, ST_COUNTED_VALUE_COMPARE> objBoard;
 	objBoard.Reserve(8);
 
 	objBoard.UpdateEntry(1, {100});
@@ -305,7 +305,7 @@ static void Test_UpdateMoveBackwardUsesSingleBlockMove()
 
 static void Test_RemoveWithValue()
 {
-	TLeaderboard<uint64_t, int64_t> objBoard;
+	TVectorLeaderboard<uint64_t, int64_t> objBoard;
 	objBoard.UpdateEntry(1001, 500);
 	objBoard.UpdateEntry(1002, 800);
 	objBoard.UpdateEntry(1003, 300);
@@ -319,7 +319,7 @@ static void Test_RemoveWithValue()
 
 static void Test_RemoveByKey()
 {
-	TLeaderboard<uint64_t, int64_t> objBoard;
+	TVectorLeaderboard<uint64_t, int64_t> objBoard;
 	objBoard.UpdateEntry(1001, 500);
 	objBoard.UpdateEntry(1002, 800);
 	objBoard.UpdateEntry(1003, 300);
@@ -332,7 +332,7 @@ static void Test_RemoveByKey()
 
 static void Test_RemoveWithWrongValueDoesNotErase()
 {
-	TLeaderboard<uint64_t, int64_t> objBoard;
+	TVectorLeaderboard<uint64_t, int64_t> objBoard;
 	objBoard.UpdateEntry(1001, 500);
 	objBoard.UpdateEntry(1002, 800);
 	objBoard.UpdateEntry(1003, 300);
@@ -346,7 +346,7 @@ static void Test_RemoveWithWrongValueDoesNotErase()
 
 static void Test_Clear()
 {
-	TLeaderboard<uint64_t, int64_t> objBoard;
+	TVectorLeaderboard<uint64_t, int64_t> objBoard;
 	objBoard.UpdateEntry(1001, 500);
 	objBoard.UpdateEntry(1002, 800);
 	objBoard.Clear();
@@ -356,7 +356,7 @@ static void Test_Clear()
 
 static void Test_GetRankByKey()
 {
-	TLeaderboard<uint64_t, int64_t> objBoard;
+	TVectorLeaderboard<uint64_t, int64_t> objBoard;
 	objBoard.UpdateEntry(1001, 500);
 	objBoard.UpdateEntry(1002, 800);
 	objBoard.UpdateEntry(1003, 300);
@@ -368,7 +368,7 @@ static void Test_GetRankByKey()
 
 static void Test_RemoveReinsert()
 {
-	TLeaderboard<uint64_t, int64_t> objBoard;
+	TVectorLeaderboard<uint64_t, int64_t> objBoard;
 	objBoard.UpdateEntry(1, 100);
 	objBoard.UpdateEntry(2, 200);
 	objBoard.RemoveEntry(2, 200);
@@ -381,7 +381,7 @@ static void Test_RemoveReinsert()
 
 static void Test_GetEntryByRank()
 {
-	TLeaderboard<uint64_t, int64_t> objBoard;
+	TVectorLeaderboard<uint64_t, int64_t> objBoard;
 	objBoard.UpdateEntry(1001, 500);
 	objBoard.UpdateEntry(1002, 800);
 
@@ -405,7 +405,7 @@ static void Test_GetEntryByRank()
 
 static void Test_GetTopN()
 {
-	TLeaderboard<uint64_t, int64_t> objBoard;
+	TVectorLeaderboard<uint64_t, int64_t> objBoard;
 	objBoard.UpdateEntry(1001, 500);
 	objBoard.UpdateEntry(1002, 800);
 	objBoard.UpdateEntry(1003, 300);
@@ -426,7 +426,7 @@ static void Test_GetTopN()
 
 static void Test_GetEntries()
 {
-	TLeaderboard<uint64_t, int64_t> objBoard;
+	TVectorLeaderboard<uint64_t, int64_t> objBoard;
 	for (uint64_t ui = 1; ui <= 10; ++ui)
 		objBoard.UpdateEntry(ui, static_cast<int64_t>(ui * 100));
 
@@ -470,11 +470,11 @@ static void Test_GetEntries()
 
 static void Test_GetEntry()
 {
-	TLeaderboard<uint64_t, int64_t> objBoard;
+	TVectorLeaderboard<uint64_t, int64_t> objBoard;
 	objBoard.UpdateEntry(1001, 500);
 
 	uint32_t uiRank = 0;
-	TLeaderboard<uint64_t, int64_t>::ST_RANK_NODE stNode{};
+	TVectorLeaderboard<uint64_t, int64_t>::ST_RANK_NODE stNode{};
 
 	CHECK(objBoard.GetEntry(1001, uiRank, stNode) == true);
 	CHECK(uiRank == 1);
@@ -484,7 +484,7 @@ static void Test_GetEntry()
 
 static void Test_MaxSize()
 {
-	TLeaderboard<uint64_t, int64_t> objBoard(3);
+	TVectorLeaderboard<uint64_t, int64_t> objBoard(3);
 	objBoard.UpdateEntry(1001, 500);
 	objBoard.UpdateEntry(1002, 800);
 	objBoard.UpdateEntry(1003, 300);
@@ -500,7 +500,7 @@ static void Test_MaxSize()
 
 static void Test_MaxSizeUpdate()
 {
-	TLeaderboard<uint64_t, int64_t> objBoard(3);
+	TVectorLeaderboard<uint64_t, int64_t> objBoard(3);
 	objBoard.UpdateEntry(1001, 500);
 	objBoard.UpdateEntry(1002, 800);
 	objBoard.UpdateEntry(1003, 300);
@@ -511,7 +511,7 @@ static void Test_MaxSizeUpdate()
 
 static void Test_MaxSizeUpdateWithStaleOldValue()
 {
-	TLeaderboard<uint64_t, int64_t> objBoard(3);
+	TVectorLeaderboard<uint64_t, int64_t> objBoard(3);
 	objBoard.UpdateEntry(1001, 800);
 	objBoard.UpdateEntry(1002, 500);
 	objBoard.UpdateEntry(1003, 300);
@@ -533,7 +533,7 @@ static void Test_MaxSizeUpdateWithStaleOldValue()
 
 static void Test_SetMaxSize()
 {
-	TLeaderboard<uint64_t, int64_t> objBoard;
+	TVectorLeaderboard<uint64_t, int64_t> objBoard;
 	objBoard.UpdateEntry(1001, 500);
 	objBoard.UpdateEntry(1002, 800);
 	objBoard.UpdateEntry(1003, 300);
@@ -557,7 +557,7 @@ static void Test_SetMaxSize()
 
 static void Test_MaxSizeOne()
 {
-	TLeaderboard<uint64_t, int64_t> objBoard(1);
+	TVectorLeaderboard<uint64_t, int64_t> objBoard(1);
 	CHECK(objBoard.UpdateEntry(1, 100) == 1);
 	CHECK(objBoard.GetCount() == 1);
 	CHECK(objBoard.UpdateEntry(2, 200) == 1);
@@ -570,7 +570,7 @@ static void Test_MaxSizeOne()
 
 static void Test_UpdateMissingKeyWithStaleOldValueInserts()
 {
-	TLeaderboard<uint64_t, int64_t> objBoard;
+	TVectorLeaderboard<uint64_t, int64_t> objBoard;
 	objBoard.UpdateEntry(1, 100);
 	objBoard.UpdateEntry(2, 200);
 
@@ -585,7 +585,7 @@ static void Test_UpdateMissingKeyWithStaleOldValueInserts()
 
 static void Test_MaxSizeTieBreakReplacement()
 {
-	TLeaderboard<uint64_t, int64_t> objBoard(3);
+	TVectorLeaderboard<uint64_t, int64_t> objBoard(3);
 	objBoard.UpdateEntry(10, 500);
 	objBoard.UpdateEntry(20, 500);
 	objBoard.UpdateEntry(30, 500);
@@ -601,7 +601,7 @@ static void Test_MaxSizeTieBreakReplacement()
 
 static void Test_Reserve()
 {
-	TLeaderboard<uint64_t, int64_t> objBoard;
+	TVectorLeaderboard<uint64_t, int64_t> objBoard;
 	objBoard.Reserve(1000);
 	CHECK(objBoard.GetCount() == 0);
 	objBoard.UpdateEntry(1001, 500);
@@ -610,7 +610,7 @@ static void Test_Reserve()
 
 static void Test_SameValueTieBreak()
 {
-	TLeaderboard<uint64_t, int64_t> objBoard;
+	TVectorLeaderboard<uint64_t, int64_t> objBoard;
 	objBoard.UpdateEntry(1003, 500);
 	objBoard.UpdateEntry(1001, 500);
 	objBoard.UpdateEntry(1002, 500);
@@ -621,7 +621,7 @@ static void Test_SameValueTieBreak()
 
 static void Test_MixedSameValue()
 {
-	TLeaderboard<uint64_t, int64_t> objBoard;
+	TVectorLeaderboard<uint64_t, int64_t> objBoard;
 	objBoard.UpdateEntry(10, 800);
 	objBoard.UpdateEntry(20, 500);
 	objBoard.UpdateEntry(30, 500);
@@ -636,7 +636,7 @@ static void Test_MixedSameValue()
 
 static void Test_CustomCompare()
 {
-	TLeaderboard<uint64_t, ST_RANK_DATA, ST_RANK_DATA_COMPARE> objBoard;
+	TVectorLeaderboard<uint64_t, ST_RANK_DATA, ST_RANK_DATA_COMPARE> objBoard;
 	objBoard.UpdateEntry(1001, {500, 100});
 	objBoard.UpdateEntry(1002, {500, 200});
 	objBoard.UpdateEntry(1003, {800, 300});
@@ -647,7 +647,7 @@ static void Test_CustomCompare()
 
 static void Test_CustomCompareRemove()
 {
-	TLeaderboard<uint64_t, ST_RANK_DATA, ST_RANK_DATA_COMPARE> objBoard;
+	TVectorLeaderboard<uint64_t, ST_RANK_DATA, ST_RANK_DATA_COMPARE> objBoard;
 	objBoard.UpdateEntry(1, {100, 10});
 	objBoard.UpdateEntry(2, {100, 20});
 	objBoard.UpdateEntry(3, {200, 30});
@@ -660,7 +660,7 @@ static void Test_CustomCompareRemove()
 
 static void Test_CustomCompareEqualValueFallsBackToKey()
 {
-	TLeaderboard<uint64_t, ST_RANK_DATA, ST_RANK_DATA_COMPARE> objBoard;
+	TVectorLeaderboard<uint64_t, ST_RANK_DATA, ST_RANK_DATA_COMPARE> objBoard;
 	objBoard.UpdateEntry(20, {100, 10});
 	objBoard.UpdateEntry(10, {100, 10});
 	objBoard.UpdateEntry(30, {100, 10});
@@ -689,14 +689,14 @@ static void Test_GetHighFrequencyBenchOpsByScale()
 
 static void Test_EmptyBoard()
 {
-	TLeaderboard<uint64_t, int64_t> objBoard;
+	TVectorLeaderboard<uint64_t, int64_t> objBoard;
 	CHECK(objBoard.GetCount() == 0);
 	CHECK(objBoard.GetRank(1001, 0) == 0);
 	CHECK(objBoard.GetRank(1001) == 0);
 	CHECK(objBoard.ForeachEntryByRank(1, [](uint32_t, const auto&) {}) == false);
 	{
 		uint32_t uiRank = 0;
-		TLeaderboard<uint64_t, int64_t>::ST_RANK_NODE stNode{};
+		TVectorLeaderboard<uint64_t, int64_t>::ST_RANK_NODE stNode{};
 		CHECK(objBoard.GetEntry(1001, uiRank, stNode) == false);
 	}
 	CHECK(objBoard.RemoveEntry(1001) == false);
@@ -707,7 +707,7 @@ static void Test_EmptyBoard()
 
 static void Test_SingleEntry()
 {
-	TLeaderboard<uint64_t, int64_t> objBoard;
+	TVectorLeaderboard<uint64_t, int64_t> objBoard;
 	objBoard.UpdateEntry(1001, 500);
 	CHECK(objBoard.GetCount() == 1);
 	CHECK(objBoard.GetRank(1001, 500) == 1);
@@ -723,7 +723,7 @@ static void Test_SingleEntry()
 
 static void Test_StringKey()
 {
-	TLeaderboard<std::string, int64_t> objBoard;
+	TVectorLeaderboard<std::string, int64_t> objBoard;
 	objBoard.UpdateEntry("Alice", 500);
 	objBoard.UpdateEntry("Bob", 800);
 	CHECK(objBoard.GetRank("Bob", 800) == 1);
@@ -734,7 +734,7 @@ static void Test_StringKey()
 
 static void Test_AscendingOrder()
 {
-	TLeaderboard<uint64_t, int64_t, std::less<int64_t>> objBoard;
+	TVectorLeaderboard<uint64_t, int64_t, std::less<int64_t>> objBoard;
 	objBoard.UpdateEntry(1, 500);
 	objBoard.UpdateEntry(2, 100);
 	objBoard.UpdateEntry(3, 800);
@@ -746,7 +746,7 @@ static void Test_AscendingOrder()
 static void Test_LargeScale()
 {
 	const uint32_t COUNT = 10000;
-	TLeaderboard<uint64_t, int64_t> objBoard;
+	TVectorLeaderboard<uint64_t, int64_t> objBoard;
 	objBoard.Reserve(COUNT);
 	for (uint64_t ui = 0; ui < COUNT; ++ui)
 		objBoard.UpdateEntry(ui, static_cast<int64_t>(ui));
@@ -766,7 +766,7 @@ static void Test_LargeScale()
 static void Test_InsertAlwaysFirst()
 {
 	const uint32_t N = 100;
-	TLeaderboard<uint64_t, int64_t> objBoard;
+	TVectorLeaderboard<uint64_t, int64_t> objBoard;
 	objBoard.Reserve(N);
 	for (uint32_t ui = 1; ui <= N; ++ui)
 	{
@@ -781,7 +781,7 @@ static void Test_InsertAlwaysFirst()
 static void Test_UpdateLastToFirst()
 {
 	const uint32_t N = 50;
-	TLeaderboard<uint64_t, int64_t> objBoard;
+	TVectorLeaderboard<uint64_t, int64_t> objBoard;
 	objBoard.Reserve(N);
 	for (uint32_t ui = 1; ui <= N; ++ui)
 		objBoard.InsertEntry(static_cast<uint64_t>(ui), static_cast<int64_t>(ui));
@@ -790,7 +790,7 @@ static void Test_UpdateLastToFirst()
 	int64_t iTopScore = static_cast<int64_t>(N);
 	for (uint32_t uiRound = 0; uiRound < N; ++uiRound)
 	{
-		TLeaderboard<uint64_t, int64_t>::ST_RANK_NODE stLast{};
+		TVectorLeaderboard<uint64_t, int64_t>::ST_RANK_NODE stLast{};
 		CHECK(objBoard.ForeachEntryByRank(N, [&stLast](uint32_t, const auto& stNode) { stLast = stNode; }) == true);
 		int64_t iOldValue = stLast.value;
 		int64_t iNewValue = iTopScore + 1;
@@ -804,7 +804,7 @@ static void Test_UpdateLastToFirst()
 static void Test_UpdateFirstToLast()
 {
 	const uint32_t N = 50;
-	TLeaderboard<uint64_t, int64_t> objBoard;
+	TVectorLeaderboard<uint64_t, int64_t> objBoard;
 	objBoard.Reserve(N);
 	for (uint32_t ui = 1; ui <= N; ++ui)
 		objBoard.InsertEntry(static_cast<uint64_t>(ui), static_cast<int64_t>(ui));
@@ -813,7 +813,7 @@ static void Test_UpdateFirstToLast()
 	int64_t iBottomScore = 1;
 	for (uint32_t uiRound = 0; uiRound < N; ++uiRound)
 	{
-		TLeaderboard<uint64_t, int64_t>::ST_RANK_NODE stFirst{};
+		TVectorLeaderboard<uint64_t, int64_t>::ST_RANK_NODE stFirst{};
 		CHECK(objBoard.ForeachEntryByRank(1, [&stFirst](uint32_t, const auto& stNode) { stFirst = stNode; }) == true);
 		int64_t iOldValue = stFirst.value;
 		int64_t iNewValue = iBottomScore - 1;
@@ -962,9 +962,9 @@ struct ST_UPDATE_OP
 	int64_t newValue;
 };
 
-static TLeaderboard<uint64_t, int64_t> BuildSpacedBoard(uint32_t uiScale, std::vector<int64_t>& vecValues)
+static TVectorLeaderboard<uint64_t, int64_t> BuildSpacedBoard(uint32_t uiScale, std::vector<int64_t>& vecValues)
 {
-	TLeaderboard<uint64_t, int64_t> objBoard;
+	TVectorLeaderboard<uint64_t, int64_t> objBoard;
 	objBoard.Reserve(uiScale);
 
 	vecValues.assign(uiScale + 1, 0);
@@ -1038,7 +1038,7 @@ static void BenchUpdateScenario(
 	const char* pszNoOldName,
 	const char* pszWithOldName,
 	uint32_t uiScale,
-	const TLeaderboard<uint64_t, int64_t>& objBoard,
+	const TVectorLeaderboard<uint64_t, int64_t>& objBoard,
 	const std::vector<ST_UPDATE_OP>& vecOps)
 {
 	const uint32_t uiOps = static_cast<uint32_t>(vecOps.size());
@@ -1070,7 +1070,7 @@ static void BenchUpdateScenario(
 
 static void BenchInsert(uint32_t uiScale)
 {
-	TLeaderboard<uint64_t, int64_t> objBoard;
+	TVectorLeaderboard<uint64_t, int64_t> objBoard;
 	objBoard.Reserve(uiScale);
 
 	std::mt19937 rng(42);
@@ -1081,7 +1081,7 @@ static void BenchInsert(uint32_t uiScale)
 
 	// UpdateEntry：每次 FindByKey O(N) 查重
 	{
-		TLeaderboard<uint64_t, int64_t> objBoardCopy;
+		TVectorLeaderboard<uint64_t, int64_t> objBoardCopy;
 		objBoardCopy.Reserve(uiScale);
 
 		CStopWatch sw;
@@ -1092,7 +1092,7 @@ static void BenchInsert(uint32_t uiScale)
 
 	// InsertEntry：跳过查重，直接二分插入
 	{
-		TLeaderboard<uint64_t, int64_t> objBoardCopy;
+		TVectorLeaderboard<uint64_t, int64_t> objBoardCopy;
 		objBoardCopy.Reserve(uiScale);
 
 		CStopWatch sw;
@@ -1104,7 +1104,7 @@ static void BenchInsert(uint32_t uiScale)
 
 static void BenchUpdate(uint32_t uiScale)
 {
-	TLeaderboard<uint64_t, int64_t> objBoard;
+	TVectorLeaderboard<uint64_t, int64_t> objBoard;
 	objBoard.Reserve(uiScale);
 
 	std::mt19937 rng(42);
@@ -1200,7 +1200,7 @@ static void BenchUpdate(uint32_t uiScale)
 
 static void BenchGetRankWithValue(uint32_t uiScale)
 {
-	TLeaderboard<uint64_t, int64_t> objBoard;
+	TVectorLeaderboard<uint64_t, int64_t> objBoard;
 	objBoard.Reserve(uiScale);
 
 	std::mt19937 rng(42);
@@ -1231,7 +1231,7 @@ static void BenchGetRankWithValue(uint32_t uiScale)
 
 static void BenchGetRankByKey(uint32_t uiScale)
 {
-	TLeaderboard<uint64_t, int64_t> objBoard;
+	TVectorLeaderboard<uint64_t, int64_t> objBoard;
 	objBoard.Reserve(uiScale);
 
 	std::mt19937 rng(42);
@@ -1258,7 +1258,7 @@ static void BenchGetRankByKey(uint32_t uiScale)
 
 static void BenchGetEntry(uint32_t uiScale)
 {
-	TLeaderboard<uint64_t, int64_t> objBoard;
+	TVectorLeaderboard<uint64_t, int64_t> objBoard;
 	objBoard.Reserve(uiScale);
 
 	std::mt19937 rng(42);
@@ -1278,7 +1278,7 @@ static void BenchGetEntry(uint32_t uiScale)
 	for (uint32_t ui = 0; ui < OPS; ++ui)
 	{
 		uint32_t uiRank = 0;
-		TLeaderboard<uint64_t, int64_t>::ST_RANK_NODE stNode{};
+		TVectorLeaderboard<uint64_t, int64_t>::ST_RANK_NODE stNode{};
 		bool bFound = objBoard.GetEntry(vecKeys[ui], uiRank, stNode);
 		ConsumeBenchScalar(static_cast<uint64_t>(bFound));
 		if (bFound)
@@ -1291,7 +1291,7 @@ static void BenchGetEntry(uint32_t uiScale)
 
 static void BenchRemoveWithValue(uint32_t uiScale)
 {
-	TLeaderboard<uint64_t, int64_t> objBoard;
+	TVectorLeaderboard<uint64_t, int64_t> objBoard;
 	objBoard.Reserve(uiScale);
 
 	std::mt19937 rng(42);
@@ -1314,7 +1314,7 @@ static void BenchRemoveWithValue(uint32_t uiScale)
 
 static void BenchRemoveByKey(uint32_t uiScale)
 {
-	TLeaderboard<uint64_t, int64_t> objBoard;
+	TVectorLeaderboard<uint64_t, int64_t> objBoard;
 	objBoard.Reserve(uiScale);
 
 	std::mt19937 rng(42);
@@ -1333,7 +1333,7 @@ static void BenchRemoveByKey(uint32_t uiScale)
 
 static void BenchForeachEntries(uint32_t uiScale, uint32_t uiStart, uint32_t uiCount, const char* pszName)
 {
-	TLeaderboard<uint64_t, int64_t> objBoard;
+	TVectorLeaderboard<uint64_t, int64_t> objBoard;
 	objBoard.Reserve(uiScale);
 
 	std::mt19937 rng(42);
@@ -1358,7 +1358,7 @@ static void BenchForeachEntries(uint32_t uiScale, uint32_t uiStart, uint32_t uiC
 
 static void BenchForeachEntryByRank(uint32_t uiScale)
 {
-	TLeaderboard<uint64_t, int64_t> objBoard;
+	TVectorLeaderboard<uint64_t, int64_t> objBoard;
 	objBoard.Reserve(uiScale);
 
 	std::mt19937 rng(42);
@@ -1386,7 +1386,7 @@ static void BenchInsertAlwaysFirst(uint32_t uiScale)
 {
 	const uint32_t OPS = uiScale;
 
-	TLeaderboard<uint64_t, int64_t> objBoard;
+	TVectorLeaderboard<uint64_t, int64_t> objBoard;
 	objBoard.Reserve(uiScale);
 
 	CStopWatch sw;
@@ -1397,7 +1397,7 @@ static void BenchInsertAlwaysFirst(uint32_t uiScale)
 
 static void BenchUpdateLastToFirst(uint32_t uiScale)
 {
-	TLeaderboard<uint64_t, int64_t> objBoard;
+	TVectorLeaderboard<uint64_t, int64_t> objBoard;
 	objBoard.Reserve(uiScale);
 	for (uint32_t ui = 1; ui <= uiScale; ++ui)
 		objBoard.InsertEntry(static_cast<uint64_t>(ui), static_cast<int64_t>(ui));
@@ -1412,7 +1412,7 @@ static void BenchUpdateLastToFirst(uint32_t uiScale)
 		auto objSim = objBoard;
 		for (uint32_t ui = 0; ui < OPS; ++ui)
 		{
-			TLeaderboard<uint64_t, int64_t>::ST_RANK_NODE stLast{};
+			TVectorLeaderboard<uint64_t, int64_t>::ST_RANK_NODE stLast{};
 			objSim.ForeachEntryByRank(uiScale, [&stLast](uint32_t, const auto& stNode) { stLast = stNode; });
 			int64_t iNewValue = iTopScore + 1;
 			vecOps.push_back({ stLast.key, stLast.value, iNewValue });
@@ -1429,7 +1429,7 @@ static void BenchUpdateLastToFirst(uint32_t uiScale)
 
 static void BenchUpdateFirstToLast(uint32_t uiScale)
 {
-	TLeaderboard<uint64_t, int64_t> objBoard;
+	TVectorLeaderboard<uint64_t, int64_t> objBoard;
 	objBoard.Reserve(uiScale);
 	for (uint32_t ui = 1; ui <= uiScale; ++ui)
 		objBoard.InsertEntry(static_cast<uint64_t>(ui), static_cast<int64_t>(ui));
@@ -1444,7 +1444,7 @@ static void BenchUpdateFirstToLast(uint32_t uiScale)
 		auto objSim = objBoard;
 		for (uint32_t ui = 0; ui < OPS; ++ui)
 		{
-			TLeaderboard<uint64_t, int64_t>::ST_RANK_NODE stFirst{};
+			TVectorLeaderboard<uint64_t, int64_t>::ST_RANK_NODE stFirst{};
 			objSim.ForeachEntryByRank(1, [&stFirst](uint32_t, const auto& stNode) { stFirst = stNode; });
 			int64_t iNewValue = iBottomScore - 1;
 			vecOps.push_back({ stFirst.key, stFirst.value, iNewValue });
@@ -1561,7 +1561,7 @@ static void GenerateHtmlReport(const char* pszPath)
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TLeaderboard 测试报告</title>
+<title>TVectorLeaderboard 测试报告</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
@@ -1657,7 +1657,7 @@ tr:hover td { background: #f7f8fa; }
 </head>
 <body>
 <div class="container">
-  <h1>TLeaderboard 测试报告</h1>
+  <h1>TVectorLeaderboard 测试报告</h1>
   <p class="subtitle">基于有序 vector 实现的百万级实时排行榜 &mdash; 生成时间：)" << __DATE__ << " " << __TIME__ << R"(</p>
 
   <div class="summary-grid" id="summary"></div>

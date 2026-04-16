@@ -1,10 +1,10 @@
 # RankList
 
-`RankList` 是一个面向 `C++` 业务开发者的轻量级实时排行榜项目，核心组件为 [`include/TLeaderboard.h`](/D:/Code/RankList/include/TLeaderboard.h)。它基于有序 `vector` 维护榜单顺序，适合“读多写少、按名次访问频繁、榜单规模较大”的业务场景，例如积分榜、战力榜、关卡榜、活动榜。
+`RankList` 是一个面向 `C++` 业务开发者的轻量级实时排行榜项目，核心组件为 [`include/TVectorLeaderboard.h`](/D:/Code/RankList/include/TVectorLeaderboard.h)。它基于有序 `vector` 维护榜单顺序，适合“读多写少、按名次访问频繁、榜单规模较大”的业务场景，例如积分榜、战力榜、关卡榜、活动榜。
 
 项目当前提供：
 
-- 一个可直接集成的模板类 `TLeaderboard<TKey, TValue, TCompare>`
+- 一个可直接集成的模板类 `TVectorLeaderboard<TKey, TValue, TCompare>`
 - 一个示例程序 [`src/main.cpp`](/D:/Code/RankList/src/main.cpp)
 - 一套覆盖基础行为、边界条件和基准测试的测试程序 [`test/BenchmarkLeaderboard.cpp`](/D:/Code/RankList/test/BenchmarkLeaderboard.cpp)
 
@@ -29,7 +29,7 @@
 ### 1. 引入头文件
 
 ```cpp
-#include "TLeaderboard.h"
+#include "TVectorLeaderboard.h"
 ```
 
 ### 2. 创建一个简单分数榜
@@ -38,11 +38,11 @@
 #include <cstdint>
 #include <cstdio>
 
-#include "TLeaderboard.h"
+#include "TVectorLeaderboard.h"
 
 int main()
 {
-    TLeaderboard<uint64_t, int64_t> board;
+    TVectorLeaderboard<uint64_t, int64_t> board;
 
     board.UpdateEntry(1001, 500);
     board.UpdateEntry(1002, 800);
@@ -68,7 +68,7 @@ int main()
 ### 3. 创建一个限长 Top 榜
 
 ```cpp
-TLeaderboard<uint64_t, int64_t> board(1000); // 只保留前 1000 名
+TVectorLeaderboard<uint64_t, int64_t> board(1000); // 只保留前 1000 名
 
 uint32_t rank = board.UpdateEntry(2001, 9500);
 if (rank == 0)
@@ -107,14 +107,14 @@ struct RankCompare
     }
 };
 
-TLeaderboard<uint64_t, RankData, RankCompare> board(3);
+TVectorLeaderboard<uint64_t, RankData, RankCompare> board(3);
 board.UpdateEntry(1, {100, 5000, 1000});
 board.UpdateEntry(2, {100, 5000, 2000});
 board.UpdateEntry(3, {100, 6000, 3000});
 board.UpdateEntry(4, {200, 3000, 4000});
 ```
 
-业务比较规则只负责比较 `value`。当 `value` 完全相等时，`TLeaderboard` 内部会自动使用 `key` 作为稳定决胜条件，保证全序关系成立。
+业务比较规则只负责比较 `value`。当 `value` 完全相等时，`TVectorLeaderboard` 内部会自动使用 `key` 作为稳定决胜条件，保证全序关系成立。
 
 ## 常见接入方式
 
@@ -202,7 +202,7 @@ bool ok = board.RemoveEntry(playerId);
 
 ### 核心结构
 
-`TLeaderboard` 只维护一个按排名有序的 `vector<ST_RANK_NODE>`，其中每个节点包含：
+`TVectorLeaderboard` 只维护一个按排名有序的 `vector<ST_RANK_NODE>`，其中每个节点包含：
 
 - `key`：业务唯一标识，例如玩家 `id`
 - `value`：用于排序的数据，可以是基础类型、结构体或指针
@@ -241,7 +241,7 @@ bool ok = board.RemoveEntry(playerId);
 - 分数相同则战力高者在前
 - 再相同则时间早者在前
 
-但容器内部需要一个稳定的全序关系，否则二分查找无法精确定位。因此 `TLeaderboard` 的规则是：
+但容器内部需要一个稳定的全序关系，否则二分查找无法精确定位。因此 `TVectorLeaderboard` 的规则是：
 
 1. 先按业务比较器 `TCompare(value)` 决定先后
 2. 如果两个 `value` 互相都不更优，则认为业务排序相等
@@ -259,7 +259,7 @@ bool ok = board.RemoveEntry(playerId);
 - 有些链路只能拿到“玩家新分数”
 - 有些链路能同时拿到“旧分数 -> 新分数”
 
-因此 `TLeaderboard` 同时提供两种接口：
+因此 `TVectorLeaderboard` 同时提供两种接口：
 
 - `UpdateEntry(key, value)`：易用，适合通用业务接入
 - `UpdateEntry(key, oldValue, newValue)`：更适合性能敏感链路
@@ -313,7 +313,7 @@ board.Reserve(1000000);
 ### `GetEntry`
 
 ```cpp
-TLeaderboard<uint64_t, int64_t>::ST_RANK_NODE node;
+TVectorLeaderboard<uint64_t, int64_t>::ST_RANK_NODE node;
 uint32_t rank = 0;
 bool found = board.GetEntry(playerId, rank, node);
 ```
@@ -361,7 +361,7 @@ ctest --test-dir build --output-on-failure
 ```text
 RankList/
 ├─ include/
-│  └─ TLeaderboard.h
+│  └─ TVectorLeaderboard.h
 ├─ src/
 │  └─ main.cpp
 ├─ test/
@@ -379,4 +379,93 @@ RankList/
 - 高效支持 TopN、分页拉榜、按名次读取
 - 接受更新和删除为 `O(N)` 的实现取舍
 
-那么 `TLeaderboard` 是一个足够直接、可维护、易扩展的选择。
+那么 `TVectorLeaderboard` 是一个足够直接、可维护、易扩展的选择。
+
+## 多数据结构扩展方案评估
+
+当需要引入不同底层数据结构（如跳表、红黑树）的排行榜实现时，有三种常见架构路线：
+
+### 方案一：策略模式（Policy-based Design）
+
+将存储后端作为模板参数注入：
+
+```cpp
+template <typename TKey, typename TValue,
+          typename TCompare = std::greater<TValue>,
+          typename TStorage = SortedVectorStorage<TKey, TValue, TCompare>>
+class TLeaderboard { ... };
+```
+
+**优点：**
+
+- 零开销抽象，全部编译期绑定，可内联，无虚函数
+- 公共业务逻辑（MaxSize 管理、rank 约定、遍历接口）只维护一份
+- 和现有 `TCompare` 策略设计一脉相承，扩展自然
+- 向后兼容，`TStorage` 有默认值，现有代码无需修改
+
+**缺点：**
+
+- Storage 接口的提取需要对现有代码做一定重构
+- 对底层不熟悉的使用者来说，模板参数层数增加，阅读成本略高
+- 不同底层的最优 API 可能不同，若强行统一 Storage 接口会产生约束
+
+---
+
+### 方案二：各自独立实现（当前选型）
+
+每种底层数据结构对应独立的模板类：
+
+```cpp
+template<...> class TVectorLeaderboard { ... };
+template<...> class TSkipListLeaderboard { ... };
+```
+
+**优点：**
+
+- 实现简单，每个类职责清晰，无额外抽象层
+- 各底层可自由设计最优 API，不受其他实现约束
+- 实现和测试相互独立，不存在接口耦合风险
+
+**缺点：**
+
+- 公共逻辑（MaxSize 截断、rank 返回约定、回调遍历）在多个类中重复
+- API 可能随实现各自演进而产生漂移，维护成本随类数量上升
+
+---
+
+### 方案三：虚基类 + 运行时多态
+
+定义抽象接口类，各实现继承并重写：
+
+```cpp
+class ILeaderboard {
+    virtual uint32_t InsertEntry(...) = 0;
+    virtual uint32_t GetRank(...) = 0;
+};
+class TVectorLeaderboard : public ILeaderboard { ... };
+class TSkipListLeaderboard : public ILeaderboard { ... };
+```
+
+**优点：**
+
+- 可运行时切换实现，适合需要依赖注入或 Mock 的场景
+- 对使用方完全透明，只依赖接口
+
+**缺点：**
+
+- 模板类与虚函数天然冲突：`TKey` / `TValue` 是类型参数，要支持虚函数需要类型擦除，复杂度显著上升
+- 虚函数调用开销对游戏服务器热路径（高频 Insert / GetRank）不必要
+- 强制统一接口会牵制各底层的 API 设计
+
+---
+
+### 最终选型：方案二（各自独立实现）
+
+**理由：**
+
+- 当前项目只有一种底层实现，策略模式的抽象收益尚未体现，重构成本先于价值到来
+- 游戏服务器场景排行榜数量有限（通常 3-10 种），独立实现的重复代码量可控
+- 虚基类方案性能开销与模板类型系统的冲突均不值得引入
+- 独立类名（`TVectorLeaderboard`、`TSkipListLeaderboard`…）直接体现底层数据结构，使用者选型一目了然
+
+若未来独立实现数量超过 3 个，且公共逻辑重复已形成明显维护负担，可再评估是否迁移至方案一。
