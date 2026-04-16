@@ -1,4 +1,5 @@
 build/
 .vs/
+.worktrees/
 *.user
 CMakeSettings.json

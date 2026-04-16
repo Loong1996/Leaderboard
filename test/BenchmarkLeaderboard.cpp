@@ -9,12 +9,21 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <algorithm>
 #include <chrono>
+#include <limits>
 #include <random>
 #include <vector>
 #include <string>
 #include <fstream>
 #include <sstream>
+
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
 
 #include "TLeaderboard.h"
 
@@ -136,6 +145,25 @@ static void Test_UpdateExisting()
 	CHECK(objBoard.GetRank(1002, 800) == 2);
 	CHECK(objBoard.GetRank(1001, 500) == 3);
 	CHECK(objBoard.GetCount() == 3);
+}
+
+static void Test_UpdateExistingWithStaleOldValue()
+{
+	TLeaderboard<uint64_t, int64_t> objBoard;
+	objBoard.UpdateEntry(1001, 500);
+	objBoard.UpdateEntry(1002, 800);
+	objBoard.UpdateEntry(1003, 300);
+
+	uint32_t uiRank = objBoard.UpdateEntry(1003, 999, 900);
+	CHECK(uiRank == 1);
+	CHECK(objBoard.GetRank(1003, 900) == 1);
+	CHECK(objBoard.GetRank(1003, 300) == 0);
+	CHECK(objBoard.GetRank(1002, 800) == 2);
+	CHECK(objBoard.GetCount() == 3);
+
+	CHECK(objBoard.RemoveEntry(1003) == true);
+	CHECK(objBoard.RemoveEntry(1003) == false);
+	CHECK(objBoard.GetCount() == 2);
 }
 
 static void Test_ReturnValue()
@@ -289,6 +317,7 @@ static void Test_RemoveWithValue()
 	CHECK(objBoard.GetCount() == 2);
 	CHECK(objBoard.GetRank(1002, 800) == 0);
 	CHECK(objBoard.GetRank(1001, 500) == 1);
+	CHECK(objBoard.GetRank(1003, 300) == 2);
 	CHECK(objBoard.RemoveEntry(9999, 0) == false);
 }
 
@@ -301,6 +330,7 @@ static void Test_RemoveByKey()
 	CHECK(objBoard.RemoveEntry(1002) == true);
 	CHECK(objBoard.GetCount() == 2);
 	CHECK(objBoard.GetRank(1001, 500) == 1);
+	CHECK(objBoard.GetRank(1003, 300) == 2);
 	CHECK(objBoard.RemoveEntry(9999) == false);
 }
 
@@ -347,14 +377,15 @@ static void Test_GetEntryByRank()
 
 	bool bFound = objBoard.ForeachEntryByRank(1, [](uint32_t uiRank, const auto& stNode)
 	{
-		(void)uiRank;
+		CHECK(uiRank == 1);
 		CHECK(stNode.key == 1002);
 		CHECK(stNode.value == 800);
 	});
 	CHECK(bFound == true);
 
-	bFound = objBoard.ForeachEntryByRank(2, [](uint32_t, const auto& stNode)
+	bFound = objBoard.ForeachEntryByRank(2, [](uint32_t uiRank, const auto& stNode)
 	{
+		CHECK(uiRank == 2);
 		CHECK(stNode.key == 1001);
 	});
 	CHECK(bFound == true);
@@ -413,6 +444,18 @@ static void Test_GetEntries()
 	});
 	CHECK(uiCount == 3);
 	CHECK(vecKeys[2] == 1);  // 排名10
+
+	CHECK(objBoard.ForeachEntries(1, 0, [](uint32_t, const auto&) {}) == 0);
+
+	vecKeys.clear();
+	uiCount = objBoard.ForeachEntries(2, (std::numeric_limits<uint32_t>::max)(), [&vecKeys](uint32_t, const auto& stNode)
+	{
+		vecKeys.push_back(stNode.key);
+	});
+	CHECK(uiCount == 9);
+	CHECK(vecKeys.size() == 9);
+	CHECK(vecKeys[0] == 9);
+	CHECK(vecKeys[8] == 1);
 }
 
 static void Test_GetEntry()
@@ -453,6 +496,28 @@ static void Test_MaxSizeUpdate()
 	objBoard.UpdateEntry(1003, 300);
 	uint32_t r = objBoard.UpdateEntry(1003, 900);
 	CHECK(r == 1);
+	CHECK(objBoard.GetCount() == 3);
+}
+
+static void Test_MaxSizeUpdateWithStaleOldValue()
+{
+	TLeaderboard<uint64_t, int64_t> objBoard(3);
+	objBoard.UpdateEntry(1001, 800);
+	objBoard.UpdateEntry(1002, 500);
+	objBoard.UpdateEntry(1003, 300);
+	CHECK(objBoard.GetCount() == 3);
+
+	uint32_t uiRank = objBoard.UpdateEntry(1003, 999, 200);
+	CHECK(uiRank == 3);
+	CHECK(objBoard.GetRank(1003, 200) == 3);
+	CHECK(objBoard.GetRank(1003, 300) == 0);
+	CHECK(objBoard.GetCount() == 3);
+
+	uiRank = objBoard.UpdateEntry(1003, 999, 600);
+	CHECK(uiRank == 2);
+	CHECK(objBoard.GetRank(1001, 800) == 1);
+	CHECK(objBoard.GetRank(1003, 600) == 2);
+	CHECK(objBoard.GetRank(1002, 500) == 3);
 	CHECK(objBoard.GetCount() == 3);
 }
 
@@ -594,6 +659,7 @@ static void Test_StringKey()
 	CHECK(objBoard.GetRank("Bob", 800) == 1);
 	CHECK(objBoard.GetRank("Alice", 500) == 2);
 	CHECK(objBoard.GetRank("Bob") == 1);
+	CHECK(objBoard.GetRank("Alice") == 2);
 }
 
 static void Test_AscendingOrder()
@@ -637,6 +703,7 @@ static void RunUnitTests()
 	printf("[基本操作]\n");
 	RUN_TEST("基本操作", "插入与查询排名",       Test_InsertAndGetRank);
 	RUN_TEST("基本操作", "更新已有条目",          Test_UpdateExisting);
+	RUN_TEST("基本操作", "旧值失配时更新已有条目", Test_UpdateExistingWithStaleOldValue);
 	RUN_TEST("基本操作", "UpdateEntry 返回值",    Test_ReturnValue);
 	RUN_TEST("基本操作", "UpdateEntry 排名不变",  Test_UpdateSameRankUsesSingleWritePath);
 	RUN_TEST("基本操作", "UpdateEntry 向前移动",  Test_UpdateMoveForwardUsesSingleBlockMove);
@@ -656,6 +723,7 @@ static void RunUnitTests()
 	printf("\n[MaxSize 截断]\n");
 	RUN_TEST("MaxSize 截断", "基本截断",           Test_MaxSize);
 	RUN_TEST("MaxSize 截断", "更新已有条目不截断", Test_MaxSizeUpdate);
+	RUN_TEST("MaxSize 截断", "旧值失配时更新已有条目", Test_MaxSizeUpdateWithStaleOldValue);
 	RUN_TEST("MaxSize 截断", "动态 SetMaxSize",    Test_SetMaxSize);
 	RUN_TEST("MaxSize 截断", "MaxSize=1 极限场景", Test_MaxSizeOne);
 	RUN_TEST("MaxSize 截断", "Reserve 预分配",     Test_Reserve);
@@ -1142,6 +1210,28 @@ static std::string JsonEscape(const std::string& str)
 	return result;
 }
 
+static std::string GetDefaultReportPath()
+{
+#ifdef _WIN32
+	char szExePath[MAX_PATH];
+	DWORD dwLength = GetModuleFileNameA(nullptr, szExePath, MAX_PATH);
+	if ((dwLength > 0) && (dwLength < MAX_PATH))
+	{
+		std::string strExePath(szExePath, dwLength);
+		std::replace(strExePath.begin(), strExePath.end(), '\\', '/');
+
+		const std::string strMarker = "/build/test/";
+		size_t uiPos = strExePath.rfind(strMarker);
+		if (uiPos != std::string::npos)
+		{
+			return strExePath.substr(0, uiPos + 6) + "/report.html";
+		}
+	}
+#endif
+
+	return "build/report.html";
+}
+
 // ============================================================
 //  生成 HTML 报告
 // ============================================================
@@ -1501,7 +1591,7 @@ int main(int argc, char* argv[])
 	RunUnitTests();
 	RunBenchmarks();
 
-	std::string strOutputPath = "report.html";
+	std::string strOutputPath = GetDefaultReportPath();
 	if (argc > 1)
 		strOutputPath = argv[1];
 
