@@ -406,16 +406,19 @@ private:
 	{
 		uint32_t uiInsertPos = this->UpperBoundPos(0, this->GetCount(), rNode);
 
-		// MaxSize 截断检查
-		if ((m_uiMaxSize > 0) && (uiInsertPos >= m_uiMaxSize))
+		if (m_uiMaxSize > 0)
 		{
-			return 0;
-		}
+			// 新位置超出上限，未上榜
+			if (uiInsertPos >= m_uiMaxSize)
+			{
+				return 0;
+			}
 
-		// 先截断末尾再插入，避免 size 短暂超过 MaxSize 触发扩容
-		if ((m_uiMaxSize > 0) && (this->GetCount() >= m_uiMaxSize))
-		{
-			m_vecRank.pop_back();
+			// 先截断末尾再插入，避免 size 短暂超过 MaxSize 触发扩容
+			if (this->GetCount() >= m_uiMaxSize)
+			{
+				m_vecRank.pop_back();
+			}
 		}
 
 		m_vecRank.insert(m_vecRank.begin() + uiInsertPos, rNode);
