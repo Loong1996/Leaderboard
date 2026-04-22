@@ -362,9 +362,19 @@ private:
 	 */
 	uint32_t UpdateExistingNode(uint32_t uiIndex, const ST_RANK_NODE& rNode)
 	{
+		if (uiIndex >= this->GetCount())
+		{
+			return 0;
+		}
+
 		if (this->ShouldMoveForward(uiIndex, rNode))
 		{
 			uint32_t uiTarget = this->UpperBoundPos(0, uiIndex, rNode);
+			if (uiTarget > uiIndex)
+			{
+				return uiIndex + 1;
+			}
+
 			std::move_backward(m_vecRank.begin() + uiTarget, m_vecRank.begin() + uiIndex, m_vecRank.begin() + uiIndex + 1);
 			m_vecRank[uiTarget] = rNode;
 			return uiTarget + 1;
@@ -372,7 +382,13 @@ private:
 
 		if (this->ShouldMoveBackward(uiIndex, rNode))
 		{
-			uint32_t uiTarget = this->UpperBoundPos(uiIndex + 1, this->GetCount(), rNode) - 1;
+			uint32_t uiInsertPos = this->UpperBoundPos(uiIndex + 1, this->GetCount(), rNode);
+			if ((uiInsertPos <= uiIndex + 1) || (uiInsertPos > this->GetCount()))
+			{
+				return uiIndex + 1;
+			}
+
+			uint32_t uiTarget = uiInsertPos - 1;
 			std::move(m_vecRank.begin() + uiIndex + 1, m_vecRank.begin() + uiTarget + 1, m_vecRank.begin() + uiIndex);
 			m_vecRank[uiTarget] = rNode;
 			return uiTarget + 1;
@@ -405,6 +421,10 @@ private:
 	uint32_t InsertNode(const ST_RANK_NODE& rNode)
 	{
 		uint32_t uiInsertPos = this->UpperBoundPos(0, this->GetCount(), rNode);
+		if (uiInsertPos > this->GetCount())
+		{
+			return 0;
+		}
 
 		if (m_uiMaxSize > 0)
 		{
