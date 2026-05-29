@@ -362,6 +362,7 @@ private:
 	 */
 	uint32_t UpdateExistingNode(uint32_t uiIndex, const ST_RANK_NODE& rNode)
 	{
+		// 防御性护栏：调用方应保证 uiIndex 有效，越界则拒绝操作、保持榜单不变
 		if (uiIndex >= this->GetCount())
 		{
 			return 0;
@@ -370,9 +371,11 @@ private:
 		if (this->ShouldMoveForward(uiIndex, rNode))
 		{
 			uint32_t uiTarget = this->UpperBoundPos(0, uiIndex, rNode);
+			// 正常不变量下 uiTarget <= uiIndex - 1；若越界说明数组顺序已被破坏，
+			// 拒绝本次更新并保持榜单原样（return 在任何写入之前），返回 0 表示更新未生效
 			if (uiTarget > uiIndex)
 			{
-				return uiIndex + 1;
+				return 0;
 			}
 
 			std::move_backward(m_vecRank.begin() + uiTarget, m_vecRank.begin() + uiIndex, m_vecRank.begin() + uiIndex + 1);
@@ -383,9 +386,11 @@ private:
 		if (this->ShouldMoveBackward(uiIndex, rNode))
 		{
 			uint32_t uiInsertPos = this->UpperBoundPos(uiIndex + 1, this->GetCount(), rNode);
+			// 正常不变量下 uiInsertPos >= uiIndex + 2；若越界说明数组顺序已被破坏，
+			// 拒绝本次更新并保持榜单原样（return 在任何写入之前），返回 0 表示更新未生效
 			if ((uiInsertPos <= uiIndex + 1) || (uiInsertPos > this->GetCount()))
 			{
-				return uiIndex + 1;
+				return 0;
 			}
 
 			uint32_t uiTarget = uiInsertPos - 1;
@@ -421,6 +426,8 @@ private:
 	uint32_t InsertNode(const ST_RANK_NODE& rNode)
 	{
 		uint32_t uiInsertPos = this->UpperBoundPos(0, this->GetCount(), rNode);
+		// 防御性护栏：upper_bound 正常返回值恒 <= GetCount()，越界说明数组顺序已被破坏，
+		// 直接拒绝插入（return 在 insert 之前），避免污染现有榜单
 		if (uiInsertPos > this->GetCount())
 		{
 			return 0;
